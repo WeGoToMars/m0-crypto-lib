@@ -1,0 +1,47 @@
+[
+  {
+    "path": "monocypher/src/monocypher.c",
+    "url": "https://raw.githubusercontent.com/LoupVaillant/Monocypher/0d85f98c9d9b0227e42cf795cb527dff372b40a4/src/monocypher.c",
+    "sha256": "02174117935699d418443c75a558a287deb06ef8cf7c1adced61d9047d2f323d"
+  },
+  {
+    "path": "monocypher/src/monocypher.h",
+    "url": "https://raw.githubusercontent.com/LoupVaillant/Monocypher/0d85f98c9d9b0227e42cf795cb527dff372b40a4/src/monocypher.h",
+    "sha256": "fcaf6ed771358bb4f40fba016f6518ae86ec02b1b877d2cc35ad92d3a26fd7b3"
+  },
+  {
+    "path": "monocypher/LICENCE.md",
+    "url": "https://raw.githubusercontent.com/LoupVaillant/Monocypher/0d85f98c9d9b0227e42cf795cb527dff372b40a4/LICENCE.md",
+    "sha256": "a5781770269d2516e52ba4863f790c10a16da4089a1e81823aee19ff1e9026b0"
+  },
+  {
+    "path": "openssl/crypto/chacha/chacha_enc.c",
+    "url": "https://raw.githubusercontent.com/openssl/openssl/636dfadc70ce26f2473870570bfd9ec352806b1d/crypto/chacha/chacha_enc.c",
+    "sha256": "08874ccd7036ca13062b51741c4ba1417826a7c4c6e5778af5e20a86d1b281ca"
+  },
+  {
+    "path": "openssl/crypto/poly1305/poly1305.c",
+    "url": "https://raw.githubusercontent.com/openssl/openssl/636dfadc70ce26f2473870570bfd9ec352806b1d/crypto/poly1305/poly1305.c",
+    "sha256": "dc6deb81a6d544d75477a2114ab1a001b9ab89f484983b3812209ebc4c6ac70f"
+  },
+  {
+    "path": "openssl/include/crypto/chacha.h",
+    "url": "https://raw.githubusercontent.com/openssl/openssl/636dfadc70ce26f2473870570bfd9ec352806b1d/include/crypto/chacha.h",
+    "sha256": "5d08b6121b1821e34bb61e79a8564d695f1f174e6636bacf7c6cc316746c3634"
+  },
+  {
+    "path": "openssl/include/crypto/poly1305.h",
+    "url": "https://raw.githubusercontent.com/openssl/openssl/636dfadc70ce26f2473870570bfd9ec352806b1d/include/crypto/poly1305.h",
+    "sha256": "4b27e03d6a58a30096315e2d2e670c77cc5889f4556b332bc4e150fbbcaceee7"
+  },
+  {
+    "path": "openssl/include/internal/endian.h",
+    "url": "https://raw.githubusercontent.com/openssl/openssl/636dfadc70ce26f2473870570bfd9ec352806b1d/include/internal/endian.h",
+    "sha256": "0be88e706fbcf8c8fd22a7e39b28d6a2c1f281820d383060a1b34f699c89ed7d"
+  },
+  {
+    "path": "openssl/LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/openssl/openssl/636dfadc70ce26f2473870570bfd9ec352806b1d/LICENSE.txt",
+    "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+  }
+]
