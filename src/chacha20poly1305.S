@@ -24,7 +24,7 @@
  * MULS gives only the low 32 bits, so each 32x29-bit product is built from four
  * 16x16 products (MAC macro). Bounds: r_j < 2^28, s_j < 2^29, h4 <= 6 at the
  * multiply. More precise bounds, discharged for the release bytes by the Lean proofs
- * (PolyBlocks.blocks_correct keeps h < 5*2^128, i.e. h4 <= 4):
+ * (Poly1305Blocks.blocks_correct keeps h < 5*2^128, i.e. h4 <= 4):
  * - r_j <= 2^28-1; s_j <= 5*(2^26-1). h0..h3 <= 2^32-1.
  * - Before message addition h4 <= 4; carry and padbit <= 1 each give h4 <= 6.
  * - aL,aH,bL < 2^16 and bH < 2^13: all four MULS products < 2^32.
@@ -37,9 +37,10 @@
  *   The fold adds c to 128 bits and its carry to (that & 3), restoring h4 <= 4.
  * The low/high ADC chains are exact integer column sums, not truncated products.
  *
- * Timing contract (design property, not yet proved or measured): control flow and
- * memory addresses depend only on len, aad_len, the pointer values and, for decrypt,
- * the public accept/reject verdict; never on key, nonce, tag or data values.
+ * Timing (proved in the ARMv6-M model, see proofs/): the executed instructions and
+ * the addresses of all memory accesses depend only on the pointer and length arguments,
+ * the stack pointer, the code and return addresses and, for decryption, whether the tag
+ * verifies; never on key, nonce, tag, AAD or payload bytes.
  * Poly1305 selects word loads only for a public 4-byte-aligned message pointer;
  * unaligned pointers use byte loads. Both paths add the same message words.
  * MULS is assumed fixed-latency, as on the reference Cortex-M0+.

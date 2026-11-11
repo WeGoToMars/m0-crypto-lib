@@ -11,7 +11,7 @@ python3 bench/build.py
 uv run --no-project bench/count.py
 ```
 
-Requires Python 3, git, network access on first build, LLVM/LLD 23.1.4, and `uv`. `LLVM_BIN` and `LLD_BIN` select tool directories. `BENCH_OPT=-O2` or `-O3` sets the C optimization level (the default is `-Os` for all three C comparators). The m0-crypto object is built by `tools/build_lib.sh speed`.
+Requires Python 3, git, network access on first build, LLVM/LLD 23.1.4, and `uv`. `LLVM_BIN` and `LLD_BIN` select tool directories. `BENCH_OPT=-O2` or `-O3` sets the C optimization level (the default is `-Os` for all three C comparators). The m0-crypto object is built by `tools/build_lib.sh`.
 
 The build records wolfSSL's effective backend macros in `wolfssl-backend.txt` and `manifest.json`. On this target it selects `POLY130532` and `WORD64_AVAILABLE`, without `WOLFSSL_W64_WRAPPER` or `WOLFSSL_ARMASM`. No blanket assembly-disable macro is set. SP Math and Fast Math select public-key arithmetic and do not alter these ChaCha20/Poly1305 kernels.
 
@@ -28,7 +28,7 @@ The build fetches source files pinned by revision and SHA-256 in `sources.lock.j
 
 ## Workloads
 
-Default lengths are 0, 64, 256, 1024, and 4096 bytes with 16-byte AAD and aligned, disjoint buffers. Each implementation runs ChaCha20 (counter 1), AEAD encrypt, AEAD decrypt, and rejection of a modified tag. Key setup and wrapper overhead are included. Each call is validated against an independent Python oracle guarded by [RFC 8439 §2.8.2](https://www.rfc-editor.org/rfc/rfc8439#section-2.8.2). No result file is written until every call passes.
+Default lengths are 0, 64, 256, 1024, and 4096 bytes with 16-byte AAD and aligned, disjoint buffers. Each implementation runs ChaCha20 (counter 1), AEAD encrypt, AEAD decrypt, and rejection of a modified tag. Key setup and wrapper overhead are included. Each call is validated against an independent Python reference, checked against the [RFC 8439 §2.8.2](https://www.rfc-editor.org/rfc/rfc8439#section-2.8.2) vector. No result file is written until every call passes.
 
 ```sh
 # Alignment and block-boundary checks

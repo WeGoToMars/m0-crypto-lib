@@ -1,6 +1,6 @@
 /*
  * ChaCha20 round macros shared by the library (src/chacha20.S) and the proof
- * fixture in fixtures/chacha20_dround_v2.S.
+ * fixture in fixtures/chacha20_dround_keep15.S.
  * SPDX-License-Identifier: MIT
  *
  * Convention: state words x[0..15] at [sp, #0..#60]; r4-r7 = 16, 20, 24, 25
@@ -57,8 +57,8 @@
     str  r3, [sp, #4*\d]
 .endm
 
-/* Double round, version 2 schedule (x[15] stays in r3 across the boundary).
- * Proved as m0c_chacha20_dround_v2_frag in the proofs repository. */
+/* Double round that keeps x[15] in r3 across the column/diagonal boundary.
+ * Proved as m0c_chacha20_dround_keep15_frag in the proofs repository. */
 .macro DOUBLE_ROUND
     /* column round */
     QR 0, 4,  8, 12

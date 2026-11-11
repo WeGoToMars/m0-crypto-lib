@@ -1,13 +1,13 @@
 # m0-crypto
 
-Fastest possible implementations of cryptographic primitives for Cortex-M0+ with formal verification in Lean 4.
+Optimized ARMv6-M assembly implementations of cryptographic primitives for Cortex-M0+ with formal verification in Lean 4.
 
 Current version contains:
 
-| Function | Header | Standard |
-|---|---|---|
-| `m0c_chacha20_xor` | [`chacha20.h`](include/m0crypto/chacha20.h) | [RFC 8439 §2.4](https://www.rfc-editor.org/rfc/rfc8439#section-2.4) |
-| `m0c_chacha20poly1305_encrypt` / `_decrypt` | [`chacha20poly1305.h`](include/m0crypto/chacha20poly1305.h) | [RFC 8439 §2.8](https://www.rfc-editor.org/rfc/rfc8439#section-2.8) |
+| Algorithm | Function | Header | Standard |
+|---|---|---|---|
+| [ChaCha20](https://en.wikipedia.org/wiki/ChaCha20-Poly1305) | `m0c_chacha20_xor` | [`chacha20.h`](include/m0crypto/chacha20.h) | [RFC 8439 §2.4](https://www.rfc-editor.org/rfc/rfc8439#section-2.4) |
+| [ChaCha20-Poly1305](https://en.wikipedia.org/wiki/ChaCha20-Poly1305) | `m0c_chacha20poly1305_encrypt` / `_decrypt` | [`chacha20poly1305.h`](include/m0crypto/chacha20poly1305.h) | [RFC 8439 §2.8](https://www.rfc-editor.org/rfc/rfc8439#section-2.8) |
 
 The headers serve as the API reference for buffer, aliasing, and alignment rules. Encryption and decryption operate in place (`out == in`). Decryption verifies the authentication tag before writing plaintext and leaves `out` unmodified on failure.
 
@@ -40,10 +40,10 @@ Benchmarked on physical MSPM0L2228 silicon running at 32 MHz, ChaCha20-Poly1305 
 ## Build
 
 ```sh
-tools/build_lib.sh speed
+tools/build_lib.sh
 ```
 
-This writes `build/lib/speed/libm0crypto.a` and `MANIFEST.txt` (recording artifact hashes and toolchain metadata). It requires clang/LLVM 23.1.4 (see `tools/versions.txt`); set `LLVM_BIN` if LLVM is not in `/opt/homebrew/opt/llvm/bin`. Version 0.1 supports the `speed` profile.
+This writes `build/lib/libm0crypto.a` and `MANIFEST.txt` (recording artifact hashes and toolchain metadata). It requires clang/LLVM 23.1.4 (see `tools/versions.txt`). Set `LLVM_BIN` if LLVM is not in `/opt/homebrew/opt/llvm/bin`.
 
 Link `libm0crypto.a` and add `include/` to your compiler's include path. The library has no dynamic allocation, no static data, no relocations, and no external dependencies. Code size is 3,030 bytes. Peak stack usage is at most 176 bytes for ChaCha20 and 320 bytes for AEAD.
 
@@ -57,18 +57,17 @@ Runs the library on QEMU's Cortex-M0 against [RFC 8439](https://www.rfc-editor.o
 
 ## Proofs and Scope
 
-Functional proofs in [Lean 4](proofs/) verify the exact 3,030-byte release binary against [RFC 8439](https://www.rfc-editor.org/rfc/rfc8439) under an ARMv6-M machine model:
+Machine-checked proofs in [Lean 4](proofs/) verify the 3,030-byte release binary against [RFC 8439](https://www.rfc-editor.org/rfc/rfc8439) under an ARMv6-M machine model:
 
-- ChaCha20 output correctness and counter-overflow rejection.
-- Poly1305 modular arithmetic and compose operations (init, blocks, finish).
-- AEAD encryption ciphertext and authentication tags.
-- Checked decryption: tag verification prior to plaintext writes, leaving output unchanged on authentication failure.
-- Memory safety: writes strictly confined to the output buffer, tag, and allocated stack frame.
-- ABI compliance: complete restoration of SP and callee-saved registers, plus zeroing of key-derived working state on the stack.
+- **Functional correctness**: ChaCha20, Poly1305, and AEAD match the specification for arbitrary buffer lengths and byte alignments, including in-place operation (`out == in`). Decryption verifies the tag before writing plaintext and leaves the output buffer untouched on authentication failure.
+- **Constant-time traces**: Executed instructions and memory access addresses depend only on public inputs (pointers, lengths, counter) and the decryption verdict, never on secret keys, nonces, or data.
+- **Memory safety and stack bounds**: Memory accesses remain confined to caller buffers, code, and the stack frame. Peak stack usage is bounded to at most 176 bytes for ChaCha20 and 320 bytes for AEAD.
+- **ABI compliance and cleanup**: The stack pointer and callee-saved registers (r4–r11) are restored on return, and secret working state on the stack is zeroed.
 
-The proofs cover arbitrary buffer lengths and byte alignments, including exact in-place operation (`out == in`). The execution model assumes ordinary memory without interrupts, concurrent memory modifications, or injected faults.
+The proofs assume sequential execution in ordinary memory without interrupts, concurrent memory modification, or hardware faults. Core execution time is assumed to depend only on instruction and address traces (as on the Cortex-M0+), an assumption tested through hardware cycle measurements rather than proved in Lean. See [proofs/README.md](proofs/README.md) for exact theorem statements and proof structure.
 
-Constant-time trace proofs, read-address bounds, and intermediate stack-pointer bounds are planned for a subsequent release. Physical side-channel resistance (power analysis, fault injection) is out of scope. Callers are responsible for maintaining nonce uniqueness per key.
+> [!IMPORTANT]
+> Physical side-channel resistance (power analysis, fault injection) is out of scope. Callers are responsible for maintaining nonce uniqueness per key.
 
 ## Cycle Comparison
 

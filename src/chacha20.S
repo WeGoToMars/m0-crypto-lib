@@ -9,11 +9,11 @@
  * Contract: include/m0crypto/chacha20.h. AAPCS: r0-r3 = out, in, len, key;
  * [sp] = nonce, [sp+4] = counter. r4-r11 are saved and restored.
  *
- * The accept/reject decision (counter overflow) depends on counter and len, which
- * are public. For accepted calls, control flow and memory addresses depend only on
- * len, the in/out pointer values and whether in and out are both 4-byte aligned;
- * never on key, nonce, counter or data. Peak stack use: 36 bytes saved registers +
- * 140 bytes frame.
+ * Validation depends only on counter and len. Under the proved ARMv6-M model
+ * (see proofs/), executed instructions and memory addresses depend only on the
+ * pointer arguments, len, counter, the stack pointer, and the code and return
+ * addresses; never on key, nonce or payload bytes. Peak stack use: 36 bytes
+ * saved registers + 140 bytes frame.
  */
     .syntax unified
     .thumb

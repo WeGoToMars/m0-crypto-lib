@@ -23,7 +23,12 @@ extern "C" {
  * - Buffers may have any alignment. Exact in-place operation (out == in) and fully disjoint buffers are supported. Partially overlapping buffers are not supported.
  * - The block counter is 32 bits (RFC 8439). If processing would require incrementing the counter past 0xFFFFFFFF, the function returns M0C_ERR_COUNTER without writing to out.
  * - Nonce uniqueness per key is the caller's responsibility.
- * - Timing specification (design goal; not formally proved): validation checks depend only on counter and len. For accepted calls, control flow and memory access patterns depend solely on len and buffer alignment (specifically, whether in and out are both 4-byte aligned). Execution time does not vary with key, nonce, counter, or payload values.
+ * - Timing (proved in the ARMv6-M model, see proofs/): the executed instructions
+ *   and memory access addresses depend only on the pointer arguments, len, counter,
+ *   the stack pointer, and the code and return addresses. They never depend on
+ *   key, nonce, or payload bytes. Validation checks depend only on counter and len.
+ * - Read bounds (proved): reads stay strictly within in, key, nonce, the code,
+ *   and the 176-byte stack frame plus the two stack arguments.
  * - The stack frame holding key-derived working state is cleared before return.
  */
 int m0c_chacha20_xor(uint8_t *out, const uint8_t *in, size_t len,

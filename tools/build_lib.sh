@@ -2,7 +2,7 @@
 # Build the release library for one profile with the pinned toolchain.
 #
 # Usage: tools/build_lib.sh speed
-#   PROFILE  speed       (the only profile in v0.1)
+#   PROFILE  speed       (the only profile in v0.2)
 #            protection  refused: not implemented in this release
 #
 # Output in build/lib/<profile>/:

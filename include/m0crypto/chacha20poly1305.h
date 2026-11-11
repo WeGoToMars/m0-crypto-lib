@@ -32,10 +32,12 @@ extern "C" {
  *   and nonce must not overlap out.
  * - When len == 0, in and out are not accessed. When aad_len == 0, aad is not accessed.
  * - Nonce uniqueness per key is the caller's responsibility.
- * - Timing specification (design goal; not formally proved): control flow and memory
- *   access patterns depend solely on len, aad_len, buffer alignment (specifically, whether
- *   out and in are both 4-byte aligned), and, for decryption, the final authentication verdict.
- *   Execution time does not vary with key, nonce, tag, or payload data.
+ * - Timing (proved in the ARMv6-M model, see proofs/): the executed instructions
+ *   and memory access addresses depend only on the pointer and length arguments,
+ *   the stack pointer, the code and return addresses, and (for decryption) whether
+ *   the tag verifies. They never depend on key, nonce, tag, AAD, or payload bytes.
+ * - Stack bounds (proved): stack usage stays within 320 bytes below the entry SP
+ *   at every instruction.
  * - Stack frames holding key-derived working state (one-time key, Poly1305 state, keystream,
  *   and expected tag) are cleared before return.
  */
