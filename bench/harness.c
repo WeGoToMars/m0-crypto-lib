@@ -22,6 +22,15 @@ typedef struct {
     int status;
 } Job;
 
+/* Caller-held state each public API requires, in bytes. armv6m.py adds it to the
+ * measured stack peak below the library call; absent symbols mean none. */
+#define CALLER_STATE(wrapper, bytes) \
+    __attribute__((used, retain)) const uint32_t caller_state_##wrapper = (bytes)
+CALLER_STATE(wolf_chacha, sizeof(ChaCha));
+CALLER_STATE(mono_encrypt, sizeof(crypto_aead_ctx));
+CALLER_STATE(mono_decrypt, sizeof(crypto_aead_ctx));
+CALLER_STATE(ossl_decrypt, 16); /* computed tag held by the composition */
+
 void run_m0c_chacha(Job *j) {
     j->status = m0c_chacha20_xor(j->out,j->in,j->len,j->key,j->nonce,1);
 }

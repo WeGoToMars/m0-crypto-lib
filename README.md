@@ -19,6 +19,8 @@ m0-crypto achieves approximately 2x better performance than existing libraries a
 
 ![Cortex-M0+ ChaCha20-Poly1305 Performance](bench/charts/chacha20poly1305/cycles_summary.svg)
 
+![Cortex-M0+ ChaCha20-Poly1305 Memory Footprint](bench/charts/chacha20poly1305/size_summary.svg)
+
 > Note: None of the libraries tested provide an optimized assembly implementation, only portable C.
 
 ## Reference Hardware: TI MSPM0L2228

@@ -15,30 +15,19 @@ import hashlib
 import io
 import json
 from pathlib import Path
-import shutil
 
 import capstone
 import unicorn
 
 from armv6m import CallResult, OUTPUT_SENTINEL, Runner
-from chart import generate_all as generate_charts
+from chart import M0C_STACK_BOUND, write_charts
 from reference import chacha, check_rfc_vector, tag_for
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "build/bench"
+CHARTS = ROOT / "bench/charts/chacha20poly1305"
 IMPLEMENTATIONS = ("m0c", "wolf", "mono", "ossl")
 OPERATIONS = ("chacha", "encrypt", "decrypt", "reject")
-CSV_FIELDS = [
-    "impl",
-    "op",
-    "bytes",
-    "aad_bytes",
-    "alignment",
-    "instructions",
-    "zero_wait_cycles",
-    "store_units",
-    "sram_store_model_cycles",
-]
 
 
 @dataclass(frozen=True)
@@ -159,29 +148,26 @@ def run_case(
         "zero_wait_cycles": result.counts.zero_wait_cycles,
         "store_units": result.counts.store_units,
         "sram_store_model_cycles": result.counts.sram_store_model_cycles,
+        "peak_stack_bytes": result.counts.peak_stack,
+        "caller_state_bytes": result.counts.caller_state,
     }
 
 
 def write_results(
     rows: list[dict], arguments: argparse.Namespace, elf_hash: str
-) -> None:
+) -> list[Path]:
     buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=CSV_FIELDS)
+    writer = csv.DictWriter(buffer, fieldnames=rows[0].keys())
     writer.writeheader()
     writer.writerows(rows)
     (OUTPUT / "cycles.csv").write_text(buffer.getvalue())
 
-    generate_charts(rows, OUTPUT)
-    charts_dir = ROOT / "bench/charts/chacha20poly1305"
-    charts_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(OUTPUT / "cycles_summary.svg", charts_dir / "cycles_summary.svg")
+    chart_paths = write_charts(rows, CHARTS)
 
-    source_hashes = {}
-    for name in ("count.py", "armv6m.py", "reference.py"):
-        source = Path(__file__).with_name(name)
-        source_hashes[name] = hashlib.sha256(source.read_bytes()).hexdigest()
-    for py_file in sorted((Path(__file__).parent / "chart").glob("*.py")):
-        source_hashes[f"chart/{py_file.name}"] = hashlib.sha256(py_file.read_bytes()).hexdigest()
+    source_hashes = {
+        name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
+        for name in ("count.py", "armv6m.py", "reference.py", "chart.py")
+    }
     metadata = {
         "elf_sha256": elf_hash,
         "unicorn": unicorn.__version__,
@@ -195,6 +181,7 @@ def write_results(
         "model": "ARM DDI 0484B instruction cost model (zero-wait-state memory baseline)",
     }
     (OUTPUT / "cycles.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    return chart_paths
 
 
 def main() -> None:
@@ -213,11 +200,15 @@ def main() -> None:
                         run_case(runner, workload, implementation, operation, alignment)
                     )
 
+    m0c_stack = max(row["peak_stack_bytes"] for row in rows if row["impl"] == "m0c")
+    if m0c_stack > M0C_STACK_BOUND:
+        raise RuntimeError(f"m0c used {m0c_stack} B of stack; proved bound is {M0C_STACK_BOUND} B")
+
     # Publish results only after every correctness check succeeds.
-    write_results(rows, arguments, elf_hash)
+    chart_paths = write_results(rows, arguments, elf_hash)
     print(f"PASS: {len(rows)} oracle-checked calls; ELF {elf_hash}")
     print(OUTPUT / "cycles.csv")
-    print(ROOT / "bench/charts/chacha20poly1305/cycles_summary.svg")
+    print(*chart_paths, sep="\n")
 
 
 if __name__ == "__main__":

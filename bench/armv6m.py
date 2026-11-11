@@ -20,21 +20,22 @@ STATUS_OFFSET = 32
 OUTPUT_SENTINEL = b"\xa5"
 GUARD_SENTINEL = b"\x5a"
 
+# Condition per branch mnemonic, from the N, Z, C, V flags.
 CONDITIONAL_BRANCHES = {
-    "beq",
-    "bne",
-    "bhs",
-    "blo",
-    "bmi",
-    "bpl",
-    "bvs",
-    "bvc",
-    "bhi",
-    "bls",
-    "bge",
-    "blt",
-    "bgt",
-    "ble",
+    "beq": lambda n, z, c, v: z,
+    "bne": lambda n, z, c, v: not z,
+    "bhs": lambda n, z, c, v: c,
+    "blo": lambda n, z, c, v: not c,
+    "bmi": lambda n, z, c, v: n,
+    "bpl": lambda n, z, c, v: not n,
+    "bvs": lambda n, z, c, v: v,
+    "bvc": lambda n, z, c, v: not v,
+    "bhi": lambda n, z, c, v: c and not z,
+    "bls": lambda n, z, c, v: not c or z,
+    "bge": lambda n, z, c, v: n == v,
+    "blt": lambda n, z, c, v: n != v,
+    "bgt": lambda n, z, c, v: not z and n == v,
+    "ble": lambda n, z, c, v: z or n != v,
 }
 SINGLE_CYCLE_INSTRUCTIONS = {
     "mov",
@@ -94,6 +95,10 @@ class Counts:
     instructions: int = 0
     zero_wait_cycles: int = 0
     store_units: int = 0
+    # Deepest stack below the entry SP of any function the wrapper calls.
+    peak_stack: int = 0
+    # State the API makes the caller hold (caller_state_* in harness.c).
+    caller_state: int = 0
 
     @property
     def sram_store_model_cycles(self) -> int:
@@ -116,27 +121,8 @@ class Instruction:
 
 
 def branch_taken(mnemonic: str, status_register: int) -> bool:
-    negative = bool(status_register & (1 << 31))
-    zero = bool(status_register & (1 << 30))
-    carry = bool(status_register & (1 << 29))
-    overflow = bool(status_register & (1 << 28))
-    conditions = {
-        "beq": zero,
-        "bne": not zero,
-        "bhs": carry,
-        "blo": not carry,
-        "bmi": negative,
-        "bpl": not negative,
-        "bvs": overflow,
-        "bvc": not overflow,
-        "bhi": carry and not zero,
-        "bls": not carry or zero,
-        "bge": negative == overflow,
-        "blt": negative != overflow,
-        "bgt": not zero and negative == overflow,
-        "ble": zero or negative != overflow,
-    }
-    return conditions[mnemonic]
+    flags = (bool(status_register & (1 << bit)) for bit in (31, 30, 29, 28))
+    return CONDITIONAL_BRANCHES[mnemonic](*flags)
 
 
 def instruction_cost(instruction: Instruction, machine: unicorn.Uc) -> tuple[int, int]:
@@ -184,7 +170,7 @@ class Runner:
                     raise RuntimeError("benchmark requires no static RAM sections")
                 self.segments.append((address, segment.data()))
             self.symbols = {
-                symbol.name: symbol["st_value"]
+                symbol.name: (symbol["st_value"] & ~1, symbol["st_size"])
                 for symbol in elf.get_section_by_name(".symtab").iter_symbols()
             }
         self.decoder = capstone.Cs(
@@ -192,6 +178,12 @@ class Runner:
         )
         self.decoder.detail = True
         self.instructions: dict[int, Instruction] = {}
+
+    def read_word(self, address: int) -> int:
+        for base, data in self.segments:
+            if base <= address < base + len(data):
+                return struct.unpack_from("<I", data, address - base)[0]
+        raise RuntimeError(f"no loaded data at {address:#x}")
 
     def decode(self, machine: unicorn.Uc, address: int, size: int) -> Instruction:
         if address not in self.instructions:
@@ -270,12 +262,23 @@ class Runner:
     ) -> CallResult:
         buffers = Buffers.for_alignment(alignment)
         machine, guards = self.prepare_call(buffers, key, nonce, aad, message, tag)
-        counts = Counts()
+        state_symbol = self.symbols.get(f"caller_state_{implementation}_{operation}")
+        counts = Counts(caller_state=self.read_word(state_symbol[0]) if state_symbol else 0)
+        wrapper, wrapper_size = self.symbols[f"run_{implementation}_{operation}"]
+        stack = {"in_wrapper": True, "entry_sp": buffers.stack}
 
         def count_instruction(machine, address, size, _user_data):
             if address == RETURN_ADDRESS:
                 machine.emu_stop()
                 return
+            # Stack is measured inside callees only, excluding the wrapper's frame.
+            in_wrapper = wrapper <= address < wrapper + wrapper_size
+            if not in_wrapper:
+                sp = machine.reg_read(arm_const.UC_ARM_REG_SP)
+                if stack["in_wrapper"]:
+                    stack["entry_sp"] = sp
+                counts.peak_stack = max(counts.peak_stack, stack["entry_sp"] - sp)
+            stack["in_wrapper"] = in_wrapper
             instruction = self.decode(machine, address, size)
             cycles, stores = instruction_cost(instruction, machine)
             counts.instructions += 1
@@ -283,7 +286,6 @@ class Runner:
             counts.store_units += stores
 
         machine.hook_add(unicorn.UC_HOOK_CODE, count_instruction)
-        wrapper = self.symbols[f"run_{implementation}_{operation}"]
         machine.emu_start(wrapper | 1, RETURN_ADDRESS, count=INSTRUCTION_LIMIT)
         if machine.reg_read(arm_const.UC_ARM_REG_PC) != RETURN_ADDRESS:
             raise RuntimeError("call did not return before the instruction limit")

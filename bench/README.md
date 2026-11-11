@@ -1,6 +1,7 @@
 # Cortex-M0+ cycle comparison
 
 ![Cortex-M0+ ChaCha20-Poly1305 Performance](charts/chacha20poly1305/cycles_summary.svg)
+![Cortex-M0+ ChaCha20-Poly1305 Memory Footprint](charts/chacha20poly1305/size_summary.svg)
 
 The benchmark suite builds and evaluates one-shot ChaCha20 and ChaCha20-Poly1305 operations across m0-crypto, wolfSSL, Monocypher, and OpenSSL portable kernels.
 
@@ -21,7 +22,7 @@ The build fetches source files pinned by revision and SHA-256 in `sources.lock.j
 
 - `build.py`: Source fetching, compilation, linking, and manifest generation.
 - `count.py`: Workload generation, correctness verification, and CSV/JSON output.
-- `chart/`: Modular SVG performance chart generation package.
+- `chart.py`: SVG summary charts (cycles and stack from `count.py`; code sizes are hand-entered constants).
 - `armv6m.py`: Unicorn/Capstone execution harness, memory layout, and instruction-cost model.
 - `reference.py`: Independent [RFC 8439](https://www.rfc-editor.org/rfc/rfc8439) calculations used for runtime correctness verification.
 - `link.ld`: Comparison image linker script.
@@ -47,10 +48,12 @@ The common runtime provides memory routines and the ARM EABI 64-bit multiply hel
 
 ## Counts and artifacts
 
-`build/bench/` contains `bench.elf`, `bench.map`, `manifest.json`, `cycles.csv`, and `cycles.json`; repository charts are published to `bench/charts/chacha20poly1305/cycles_summary.svg`. The manifests record source hashes, compiler flags, release text hash, linked ELF hash, workloads, emulator versions, and source hashes of the counter scripts. The CSV reports executed instructions and two cycle estimates:
+`build/bench/` contains `bench.elf`, `bench.map`, `manifest.json`, `cycles.csv`, and `cycles.json`; repository charts are published to `bench/charts/chacha20poly1305/cycles_summary.svg` and `size_summary.svg`. The manifests record source hashes, compiler flags, release text hash, linked ELF hash, workloads, emulator versions, and source hashes of the counter scripts. The CSV reports executed instructions and two cycle estimates:
 
 - `zero_wait_cycles`: Cortex-M0+ instruction costs from [ARM DDI 0484B, table 3-1](https://documentation-service.arm.com/static/60411742ee937942ba3016f2). The model selects the single-cycle multiplier and ordinary AHB memory accesses.
 - `sram_store_model_cycles`: The same total plus one cycle per store transfer, including PUSH and STM elements.
+- `peak_stack_bytes`: Deepest stack below the entry SP of any function the wrapper calls; the wrapper's own frame is excluded. The run fails if m0-crypto exceeds its Lean-proved 320-byte bound.
+- `caller_state_bytes`: State the public API requires the caller to hold on its stack (`sizeof(ChaCha)` for wolfSSL ChaCha20, `sizeof(crypto_aead_ctx)` for Monocypher AEAD, the 16-byte computed tag in the OpenSSL decrypt composition), declared as `caller_state_*` in `harness.c`. The stack chart stacks it on `peak_stack_bytes`.
 
 Unicorn executes the instructions and the Python hook assigns modeled costs. These metrics represent instruction-cost model estimates without flash wait-states, cache, or bus contention. Physical hardware measurements on the reference [TI MSPM0L2228](https://www.ti.com/product/MSPM0L2228) silicon at 32 MHz yield approximately 72 cycles per byte for AEAD over 4,096 bytes executing from flash.
 
