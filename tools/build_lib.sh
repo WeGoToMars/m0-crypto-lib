@@ -1,26 +1,16 @@
 #!/bin/sh
-# Build the release library for one profile with the pinned toolchain.
+# Build the release library with the pinned toolchain.
 #
-# Usage: tools/build_lib.sh speed
-#   PROFILE  speed       (the only profile in v0.2)
-#            protection  refused: not implemented in this release
+# Usage: tools/build_lib.sh
 #
-# Output in build/lib/<profile>/:
+# Output in build/lib/:
 #   m0crypto.o       the release unit src/m0crypto.S, relocation-free
 #   libm0crypto.a    deterministic archive of m0crypto.o
 #   text.bin         the .text bytes (the verified artifact)
-#   MANIFEST.txt     profile, toolchain, sha256 of every output and of .text
+#   MANIFEST.txt     toolchain, sha256 of every output and of .text
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-PROFILE=${1:-}
-case "$PROFILE" in
-    speed) ;;
-    protection)
-        echo "build_lib: the protection profile is not implemented in this release." >&2
-        echo "build_lib: select 'speed' explicitly; it makes no power-analysis or fault claims." >&2
-        exit 2 ;;
-    *) echo "usage: tools/build_lib.sh speed" >&2; exit 2 ;;
-esac
+[ $# -eq 0 ] || { echo "usage: tools/build_lib.sh" >&2; exit 2; }
 
 LLVM_BIN=${LLVM_BIN:-/opt/homebrew/opt/llvm/bin}
 EXPECT_CLANG=$(sed -n 's/^clang=//p' "$ROOT/tools/versions.txt")
@@ -30,7 +20,7 @@ if [ "$GOT_CLANG" != "$EXPECT_CLANG" ]; then
     exit 1
 fi
 
-OUT="$ROOT/build/lib/$PROFILE"
+OUT="$ROOT/build/lib"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 "$LLVM_BIN/clang" --target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb \
@@ -48,7 +38,6 @@ fi
 sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
 {
     echo "m0-crypto library build"
-    echo "profile=$PROFILE"
     echo "source=src/m0crypto.S"
     echo "clang=$GOT_CLANG"
     echo "target=thumbv6m-none-eabi cortex-m0plus"
