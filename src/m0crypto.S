@@ -12,3 +12,9 @@
 #include "chacha20.S"
     .p2align 2
 #include "chacha20poly1305.S"
+    .p2align 2
+#include "blake2s_compress.S"
+    .p2align 2
+#include "blake2s_copy.S"
+    .p2align 2
+#include "blake2s_stream.S"

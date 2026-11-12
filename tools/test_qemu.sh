@@ -2,6 +2,7 @@
 # Build the on-target test images and run them under QEMU's Cortex-M0 "microbit"
 # machine with semihosting. QEMU checks ARMv6-M behaviour, not timing.
 #   test_chacha20: m0c_chacha20_xor   test_aead: ChaCha20-Poly1305 and Poly1305
+#   test_blake2s: BLAKE2s-256 (init, update, final)
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 LLVM_BIN=${LLVM_BIN:-/opt/homebrew/opt/llvm/bin}
@@ -16,7 +17,7 @@ cc() { "$LLVM_BIN/clang" $CFLAGS -I "$ROOT/include" -I "$ROOT/src" -I "$ROOT/tes
 # Both images link the release unit src/m0crypto.S (relocation-free).
 for src in "$ROOT/src/m0crypto.S" "$T/startup.S" \
            "$T/check_call.S" "$T/check_call8.S" "$T/ref_chacha20.c" \
-           "$T/test_chacha20.c" "$T/test_aead.c"; do
+           "$T/test_chacha20.c" "$T/test_aead.c" "$T/test_blake2s.c"; do
     cc "$src"
 done
 link() {   # link IMAGE OBJ...
@@ -29,9 +30,11 @@ link test_chacha20 "$O/startup.S.o" "$O/m0crypto.S.o" "$O/check_call.S.o" \
     "$O/ref_chacha20.c.o" "$O/test_chacha20.c.o"
 link test_aead "$O/startup.S.o" "$O/m0crypto.S.o" \
     "$O/check_call8.S.o" "$O/test_aead.c.o"
+link test_blake2s "$O/startup.S.o" "$O/m0crypto.S.o" \
+    "$O/check_call8.S.o" "$O/test_blake2s.c.o"
 
 STATUS_ALL=0
-for img in test_chacha20 test_aead; do
+for img in test_chacha20 test_aead test_blake2s; do
     LOG="$OUT/$img.log"
     STATUS=0
     # perl alarm: kill QEMU if the image hangs.
