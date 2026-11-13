@@ -2,9 +2,21 @@
 # Build the on-target test images and run them under QEMU's Cortex-M0 "microbit"
 # machine with semihosting. QEMU checks ARMv6-M behaviour, not timing.
 #   test_chacha20: m0c_chacha20_xor   test_aead: ChaCha20-Poly1305 and Poly1305
-#   test_blake2s: BLAKE2s-256 (init, update, final)
+#   test_blake2s: BLAKE2s-256 (init, update, final)   test_x25519: X25519 (RFC 7748)
+#
+# Usage: tools/test_qemu.sh [ASSET...]     (default: all assets)
+#   ASSET is one of: chacha20poly1305 blake2s x25519
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ALL_ASSETS="chacha20poly1305 blake2s x25519"
+ASSETS=${*:-$ALL_ASSETS}
+for a in $ASSETS; do
+    case " $ALL_ASSETS " in
+        *" $a "*) ;;
+        *) echo "usage: tools/test_qemu.sh [$ALL_ASSETS]" >&2; exit 2 ;;
+    esac
+done
+has() { case " $ASSETS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 LLVM_BIN=${LLVM_BIN:-/opt/homebrew/opt/llvm/bin}
 LLD_BIN=${LLD_BIN:-/opt/homebrew/opt/lld/bin}
 QEMU=${QEMU:-qemu-system-arm}
@@ -15,17 +27,25 @@ CFLAGS="--target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb -Os -ffreestandi
 T="$ROOT/tests"
 cc() { "$LLVM_BIN/clang" $CFLAGS -I "$ROOT/include" -I "$ROOT/src" -I "$ROOT/tests" -c "$1" -o "$OUT/$(basename "$1").o"; }
 # Each image links only its own release asset (relocation-free unit).
-for src in "$ROOT/src/m0crypto_chacha20poly1305.S" "$ROOT/src/m0crypto_blake2s.S" "$T/startup.S" \
-           "$T/check_call.S" "$T/check_call8.S" "$T/ref_chacha20.c" \
-           "$T/test_chacha20.c" "$T/test_aead.c" "$T/test_blake2s.c"; do
-    cc "$src"
-done
+cc "$T/startup.S"
+cc "$T/check_call8.S"
+if has chacha20poly1305; then
+    for src in "$ROOT/src/m0crypto_chacha20poly1305.S" "$T/check_call.S" "$T/ref_chacha20.c" \
+               "$T/test_chacha20.c" "$T/test_aead.c"; do
+        cc "$src"
+    done
+fi
+if has blake2s; then cc "$ROOT/src/m0crypto_blake2s.S"; cc "$T/test_blake2s.c"; fi
+if has x25519; then cc "$ROOT/src/m0crypto_x25519.S"; cc "$T/test_x25519.c"; fi
 link() {   # link IMAGE OBJ...
     img=$1; shift
     "$LLD_BIN/ld.lld" -T "$T/microbit.ld" --build-id=none -o "$OUT/$img.elf" "$@"
     echo "built $OUT/$img.elf"
 }
 O=$OUT
+IMAGES=""
+if has chacha20poly1305; then
+IMAGES="$IMAGES test_chacha20 test_aead"
 link test_chacha20 "$O/startup.S.o" "$O/m0crypto_chacha20poly1305.S.o" "$O/check_call.S.o" \
     "$O/ref_chacha20.c.o" "$O/test_chacha20.c.o"
 # The Poly1305 entry points are local symbols of the release object (not exported). test_aead
@@ -40,11 +60,22 @@ for f in m0c_poly1305_init m0c_poly1305_blocks m0c_poly1305_finish; do
 done
 link test_aead $P1305 "$O/startup.S.o" "$O/m0crypto_chacha20poly1305.S.o" \
     "$O/check_call8.S.o" "$O/test_aead.c.o"
+fi
+if has blake2s; then
+IMAGES="$IMAGES test_blake2s"
 link test_blake2s "$O/startup.S.o" "$O/m0crypto_blake2s.S.o" \
     "$O/check_call8.S.o" "$O/test_blake2s.c.o"
+fi
+if has x25519; then
+IMAGES="$IMAGES test_x25519"
+# m0c_x25519 uses 516 bytes of stack: check_call8 paints and snapshots 1,024 bytes here.
+"$LLVM_BIN/clang" $CFLAGS -DCC8_BYTES=1024 -c "$T/check_call8.S" -o "$O/check_call8_1k.S.o"
+link test_x25519 "$O/startup.S.o" "$O/m0crypto_x25519.S.o" \
+    "$O/check_call8_1k.S.o" "$O/test_x25519.c.o"
+fi
 
 STATUS_ALL=0
-for img in test_chacha20 test_aead test_blake2s; do
+for img in $IMAGES; do
     LOG="$OUT/$img.log"
     STATUS=0
     # perl alarm: kill QEMU if the image hangs.

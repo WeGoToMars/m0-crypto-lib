@@ -1,23 +1,27 @@
 /*
  * int check_call8(int (*fn)(...), const uint32_t args[8], uint32_t result[2])
  * Calls fn(args[0], ..., args[7]) (args[4..7] on the stack, AAPCS) with sentinel
- * values in r4-r11 and 512 painted bytes (0xa5) below the call-site SP. Returns fn's
+ * values in r4-r11 and CC8_BYTES painted bytes (0xa5) below the call-site SP (default
+ * 512; -DCC8_BYTES=N for a deeper callee, N a multiple of 4). Returns fn's
  * return value. result[0] = bitmask of changed callee-saved registers (bit n = r(n))
  * or SP (bit 13); result[1] = peak stack bytes used below the call-site SP.
- * stack_snapshot[128] receives the 512 bytes below the call-site SP after return
- * (word i is at SP - 512 + 4 i), so the caller can check that frames were cleared.
+ * stack_snapshot[CC8_BYTES / 4] receives the CC8_BYTES below the call-site SP after return
+ * (word i is at SP - CC8_BYTES + 4 i), so the caller can check that frames were cleared.
  * cc8_volatile[5] receives r1, r2, r3, r12 and lr as fn left them on return, so the
  * caller can check documented register clearing. They are saved into this
  * function's own frame (above the call-site SP), so the snapshot is not disturbed.
  * Test image only.
  */
+#ifndef CC8_BYTES
+#define CC8_BYTES 512
+#endif
     .syntax unified
     .thumb
     .bss
     .p2align 2
     .global stack_snapshot
 stack_snapshot:
-    .space 512
+    .space CC8_BYTES
 cc8_sp:
     .space 4
 cc8_fn:
@@ -47,9 +51,9 @@ check_call8:
     str  r4, [sp, #8]
     ldr  r4, [r1, #28]
     str  r4, [sp, #12]
-    /* paint 512 bytes below the call-site SP */
+    /* paint CC8_BYTES below the call-site SP */
     mov  r4, sp
-    movs r5, #128
+    ldr  r5, =(CC8_BYTES / 4)
     ldr  r6, =0xa5a5a5a5
 1:  subs r4, #4
     str  r6, [r4]
@@ -143,7 +147,7 @@ check_call8:
     adds r1, r1, r2
 10: /* peak stack: deepest painted word that changed */
     mov  r2, sp
-    movs r3, #128
+    ldr  r3, =(CC8_BYTES / 4)
     ldr  r6, =0xa5a5a5a5
     movs r5, #0
     movs r4, #0
@@ -155,13 +159,12 @@ check_call8:
     movs r5, r4
 12: subs r3, #1
     bne  11b
-    /* snapshot [sp-512, sp) */
+    /* snapshot [sp-CC8_BYTES, sp) */
     mov  r2, sp
-    subs r2, #255
-    subs r2, #255
-    subs r2, #2
+    ldr  r3, =CC8_BYTES
+    subs r2, r2, r3
     ldr  r3, =stack_snapshot
-    movs r6, #128
+    ldr  r6, =(CC8_BYTES / 4)
 13: ldr  r7, [r2]
     str  r7, [r3]
     adds r2, #4

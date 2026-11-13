@@ -4,6 +4,8 @@
 
 The header also contains [RFC 8439](https://www.rfc-editor.org/rfc/rfc8439) vectors and values generated using pyca/cryptography 50.0.1. No pyca implementation code is included.
 
+`tests/x25519_vectors.h` contains transformed test data from Wycheproof's `x25519_test.json` (SHA-256 `35c3f5231cf25cc640b524d403461deee9e49441d5d915a3a25b2c8ff5adbe7d`), under the same Apache-2.0 license: all 518 test cases, their private key, public key and shared secret stored in C arrays. It also contains [RFC 7748](https://www.rfc-editor.org/rfc/rfc7748) vectors; every value was cross-checked against pyca/cryptography 50.0.1 (no pyca code is included).
+
 Benchmark dependencies are fetched separately into ignored `bench/third_party/`:
 
 - wolfSSL v5.9.4-stable: GPL-3.0 / commercial licensing.
