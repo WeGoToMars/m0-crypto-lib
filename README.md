@@ -133,7 +133,7 @@ See [bench/README.md](bench/README.md) for the Cortex-M0+ cycle-count harness. I
 The proofs are maintained in a git submodule:
 
 ```sh
-git clone --recurse-submodules <this repository>
+git clone --recurse-submodules https://github.com/WeGoToMars/m0-crypto-lib
 proofs/tools/check.sh              # every asset; requires Lean v4.35.0 (elan), LLVM 23.1.4, QEMU 11.1.3
 proofs/tools/check.sh blake2s      # one asset
 ```
