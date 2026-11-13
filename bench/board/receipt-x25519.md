@@ -15,10 +15,10 @@ Scope: functional check + cycle counts of one `m0c_x25519` call of the released
 - Provenance of the code: worktree `m0-crypto-wt/board-measure`, branch `review/board-measure`,
   based on lib commit 75ab110 (`split-assets` line). Harness files are new under `bench/board/`.
 - Object: `.text` 7,022 B, sha256 `bb9c315f5a91a6fb35f81859c1c7562a8e084efef1bddfef2ef949dbd37fec94`
-  (MANIFEST in `data/2026-11-13/MANIFEST-x25519.txt`). Flashed images (sha256 of `bench.bin`):
+  (MANIFEST in `bench/board/data/2026-11-13/MANIFEST-x25519.txt`). Flashed images (sha256 of `bench.bin`):
   - flash placement `24f5e45ca8708756cf8076317391600e8b613b423a213a2c925a2b2d377a70ec` (library at 0x774c)
   - sram placement `eb39435d477bddf1b6139004f706f0223ca7d1b13c987fe840f438e6ecf7dfd1`
-- Commands: see `bench/board/README.md`; logs `data/2026-11-13/x25519-{flash,sram}.log`, `data/2026-11-13/summary.md`.
+- Commands: see `bench/board/README.md`; logs `bench/board/data/2026-11-13/x25519-{flash,sram}.log`, `bench/board/data/2026-11-13/summary.md`.
 
 ## Correctness
 `RESULT: PASS`, `EXIT 0x00000000` in both logs. Gate: 44 scalar/point pairs x 4 buffer layouts
@@ -33,8 +33,16 @@ extremes, single bit), 14 point edge cases (0, 1, low order, p-1, p, p+1, 2^255-
 |---|---:|---|
 | flash | 3,480,832 | 1 |
 | sram | 3,453,749 | 1 |
-| model, zero-wait | 3,289,570 | |
-| model, store-model (comparable) | 3,453,751 | |
+| model, zero-wait (`model.py`) | 3,289,570 | |
+| model, store-model (`model.py`, comparable) | 3,453,751 | |
+
+Both model rows come from `bench/board/model.py` (`bench/board/data/2026-11-13/model-x25519.txt`):
+the cost of every instruction of the call including its return (3,289,572 zero-wait cycles), minus
+the 2 cycles of the `bx lr` that the board's calibration interval also contains. The store-model
+figure adds one cycle per store transfer. The 3,289,592 cycles in the main README and the
+CHANGELOG are the same zero-wait model counted by `bench/count.py` from the benchmark's C
+wrapper `run_m0c_shared`, which adds 20 cycles (`push`, `mov`, three `ldr`, `bl`, `str`, `pop`)
+to the call.
 
 Identical for all 44 vectors, all four layouts (other layouts timed for 6 vectors) and all
 5 repeats.
@@ -43,13 +51,12 @@ Identical for all 44 vectors, all four layouts (other layouts timed for 6 vector
 Stack high-water mark 516 B, matching the claimed 516 B.
 
 ## Board vs model
-- sram: board 3,453,749 vs model 3,453,751 = -2 (unexplained residual, same size as a `bx lr`).
+- sram: board 3,453,749 vs model 3,453,751 = -2: the call overhead was calibrated with an empty function in flash, which costs 2 ticks more than in SRAM.
 - flash: +27,081 cycles (+0.78%) over the model: flash fetch wait states, not decomposed further.
 - zero-wait model is 164,179 cycles below the sram board figure: the store-cycle term is required.
 
 ## Not done / limits
 - One board, one clock, voltage not measured, no repeat across power cycles, flash alignment
   sensitivity not explored; reset-default wait-state setup only.
-- No wolfSSL/Pornin X25519 comparison: dev harnesses not in the new layout; none invented.
-- First board attempt failure (see BLAKE2s receipt) happened on the BLAKE2s run, not X25519.
-- Original app restored and verified byte-identical (`data/2026-11-13/board-restore.txt`).
+- No comparator was measured on the board. The comparisons with x25519-cm0, wolfSSL, Monocypher
+  and OpenSSL in `bench/` (`bench/README.md`) are emulator-model estimates, not board measurements.

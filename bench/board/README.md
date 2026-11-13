@@ -2,7 +2,7 @@
 
 Measures the **unmodified release objects** (`build/lib/ASSET/m0crypto_ASSET.o` from
 `tools/build_lib.sh`) on an MSPM0L2228 board and compares with the Unicorn/`bench/armv6m.py`
-model. Receipts: `receipt-blake2s.md`, `receipt-x25519.md`. Raw logs: `data/2026-11-13/` on the measuring machine (`run_board.sh` writes them there; they are not checked in).
+model. Receipts: `receipt-blake2s.md`, `receipt-x25519.md`. Raw logs: `bench/board/data/2026-11-13/` on the measuring machine (`run_board.sh` writes them there; they are not checked in).
 
 Files
 - `blake2s.c`, `x25519.c`: on-board harnesses (correctness gate against known vectors, stack

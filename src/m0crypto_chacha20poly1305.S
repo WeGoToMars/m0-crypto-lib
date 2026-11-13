@@ -5,8 +5,8 @@
  * Every call inside the unit targets a local label, so the assembler resolves it and the
  * object has no relocations: its .text bytes are the same at any 4-byte-aligned link
  * address (tools/build_lib.sh checks this). The unit is released and verified on its own.
- * m0c_chacha20_xor is first, so its bytes equal the standalone src/chacha20.S object used
- * by the ChaCha20-only benchmark.
+ * m0c_chacha20_xor is first, at offset 0: tools/test_qemu.sh locates the internal Poly1305
+ * entry points relative to it.
  */
 #define M0C_UNIT 1
 #include "chacha20.S"

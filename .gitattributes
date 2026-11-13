@@ -1,1 +1,4 @@
 bench/** linguist-vendored
+tests/** linguist-vendored
+tools/** linguist-vendored
+*.inc linguist-language=Assembly

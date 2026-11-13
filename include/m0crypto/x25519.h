@@ -29,6 +29,15 @@ extern "C" {
  *   bytes: the result, the clearing above, the stack bound, the read regions, and a
  *   trace that depends only on the addresses and LR, not on the scalar or point.
  *   The proofs cover uninterrupted calls.
+ * - Preconditions of the proofs (X25519.Pre in proofs/). SP is the stack pointer at
+ *   entry. "code" is the 7,022-byte .text of the linked m0crypto_x25519 object.
+ *   "A disjoint from B" means both address ranges end at or below 2^32 and do not
+ *   overlap.
+ *     code start and SP 4-byte aligned; SP >= 516;
+ *     [SP-516, SP) disjoint from the code, out, scalar and point;
+ *     out disjoint from the code;
+ *     LR has bit 0 set (Thumb) and the return address lies outside the code.
+ *   scalar and point may overlap the code, each other and out.
  */
 int m0c_x25519(uint8_t out[32], const uint8_t scalar[32], const uint8_t point[32]);
 

@@ -4,7 +4,7 @@
  * Disjoint accessible n-byte ranges, 1<=n<=64 (the only caller passes n>=8), any
  * byte alignment. Exactly n bytes written, reads stay within the source range.
  * AAPCS: preserves r4-r11/SP, clobbers r0-r3/APSR; 20-byte stack frame (r4-r7, lr),
- * disjoint from buffers; entry SP is 8-byte aligned. Returns with POP {pc}. Ordinary RAM, no
+ * disjoint from buffers; entry SP is 4-byte aligned. Returns with POP {pc}. Ordinary RAM, no
  * faults/concurrent writers assumed.
  * Branches/addresses depend on pointers and length, never copied byte values.
  * Word loads are used only when source and destination are both 4-byte aligned

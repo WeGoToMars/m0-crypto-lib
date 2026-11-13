@@ -2,8 +2,8 @@
  * Internal CPU-only BLAKE2s-256 interface, not a stable public API.
  * All code is Thumb assembly (blake2s_compress.S, blake2s_copy.S, blake2s_stream.S),
  * assembled as one relocation-free unit. No power-analysis or fault countermeasures.
- * Proof status: the Lean proofs in proofs/ are about this version, including the
- * clearing described below (see CHANGELOG, 0.3.0).
+ * Proof status: the Lean proofs in proofs/ are about this version; which parts of the
+ * clearing described below are proved is stated with each item (see CHANGELOG, 0.3.0).
  */
 #ifndef M0C_BLAKE2S_INTERNAL_H
 #define M0C_BLAKE2S_INTERNAL_H
@@ -28,11 +28,12 @@ _Static_assert(offsetof(m0c_blake2s_ctx, used) == 104, "CTX_USED");
  * h[i] ^= v[i] ^ v[i+8] after ten rounds. f0 must be 0 (nonfinal block) or
  * 0xffffffff (final block): the code XORs any value into v14, but only these two are proved.
  * h[32] and block[64] are word aligned, accessible and disjoint; block includes
- * zero padding. Entry SP is 8-byte aligned, with 136 accessible bytes below it
+ * zero padding. Entry SP is 4-byte aligned, with 136 accessible bytes below it
  * disjoint from both buffers. Ordinary little-endian RAM, immutable code, no
  * external writers or faults. Updates only h and its stack frame; preserves
  * block, SP and r4-r11; clobbers LR/APSR. Clears its 100 local bytes (the message
- * block copy, working state v1..v7 and the h pointer) and returns r0-r3 and r12 zero;
+ * block copy, working state v1..v7, the h pointer and one padding word) and returns
+ * r0-r3 and r12 zero;
  * the 36 saved bytes are the caller's registers and stay. h is the result, not cleared.
  */
 void m0c_blake2s_compress(uint32_t h[8], const uint8_t block[64], uint32_t t0, uint32_t t1,
@@ -40,11 +41,12 @@ void m0c_blake2s_compress(uint32_t h[8], const uint8_t block[64], uint32_t t0, u
 /* Unkeyed BLAKE2s-256 streaming: context/input/output disjoint; arbitrary
  * byte-aligned input/output; context word aligned (normal C alignment is 8).
  * Stack: init 4 bytes; update and final 160 (24 + compress 136; the copy path 44).
- * Caller limits cumulative length to UINT64_MAX; no dynamic overflow check. Final
+ * Caller keeps the cumulative length below 2^64 bytes; no dynamic overflow check. Final
  * consumes the context. No updates/final afterward without init. Empty updates permit
  * NULL input. Context alignment is normal C.
- * Clearing: update and final return with r0-r3 zero on every path, and the last
- * compressed block and working state are zeroed inside compress. The context (h, buf,
+ * Clearing: update and final return with r0-r3 zero on every path (proved), and each
+ * compression zeroes its block copy and working state before returning (by construction;
+ * proved only for compress itself, not stated by any release claim). The context (h, buf,
  * count, used) is caller memory and is NOT cleared by update or final; the caller wipes
  * it. init handles only public constants.
  */

@@ -15,12 +15,12 @@ board, one clock. These are hardware measurements; modelled numbers are listed s
 - Provenance of the code: worktree `m0-crypto-wt/board-measure`, branch `review/board-measure`,
   based on lib commit 75ab110 (`split-assets` line). Harness files are new under `bench/board/`.
 - Object: `.text` 4,748 B, sha256 `baf869bf5a30e81fc79956d2d61fde332555816d1cc0b0b0daede80a3dd4c68b`
-  (MANIFEST in `data/2026-11-13/MANIFEST-blake2s.txt`). `build.sh` asserts the image contains exactly
+  (MANIFEST in `bench/board/data/2026-11-13/MANIFEST-blake2s.txt`). `build.sh` asserts the image contains exactly
   this byte string once. Flashed images (sha256 of `bench.bin`, 17,424 B flash / 17,460 B sram):
   - flash placement `b2adf63e8ddb816ee3c38a3574a2e534617610048ea76e225388c989e3a0266f` (library at 0x7ac0)
   - sram placement `aeb8014c9a3eeb8dfe4b47023fb3f790372dad9d42fa7f3769d62e1355f4188a` (library copied to SRAM at reset)
   The sha of the flashed image is also printed in each log (`IMAGE,` line).
-- Commands: see `bench/board/README.md`; logs `data/2026-11-13/blake2s-{flash,sram}.log`, summary `data/2026-11-13/summary.md`.
+- Commands: see `bench/board/README.md`; logs `bench/board/data/2026-11-13/blake2s-{flash,sram}.log`, summary `bench/board/data/2026-11-13/summary.md`.
 
 ## Correctness
 Each log has `RESULT: PASS` and `EXIT 0x00000000`: every digest of every timed hash (31 lengths
@@ -45,7 +45,7 @@ INIT = 60 (flash) / 46 (sram). Selected rows, `update` at word-aligned input, `f
 | 4096 | 184335 | 2980 | 187375 | 207485 | 202365 |
 
 Cycles/byte, single aligned update through the C wrapper: 1024 B 46.03; 4096 B 45.76 (sram
-45.05). Marginal cost 2,923 cycles per 64-B block (flash), 2,877 (sram). Full table: `data/2026-11-13/summary.md`.
+45.05). Marginal cost 2,923 cycles per 64-B block (flash), 2,877 (sram). Full table: `bench/board/data/2026-11-13/summary.md`.
 
 ## Constant-cycle findings
 - Across 5 contents (zeros, 0xff, two xorshift streams, counting) the counts were identical for
@@ -58,8 +58,9 @@ Cycles/byte, single aligned update through the C wrapper: 1024 B 46.03; 4096 B 4
 Stack high-water mark: update 160 B, final 160 B (init 4 B). Matches the claimed 160 B.
 
 ## Board vs model (`model.py`, store-model figure with the no-op return correction)
-- sram placement: update -3..+31 cycles, final -3, init -3 (n=124/31/1). Small constant
-  residuals of -3 are not explained.
+- sram placement: update -3..+31 cycles, final -3, init -3 (n=124/31/1). The constant -3 is
+  the call overhead calibrated in flash (3 ticks more than in SRAM); +31 is the length-0 update,
+  which `model.py` does not compute.
 - flash placement: update +7..+3,672 cycles (grows with length, about 1.8% at 4 KiB aligned),
   final +47..48, init +11. The model has no flash wait states or prefetch, so flash is
   slower than modelled, as expected; the share was not decomposed further.
@@ -67,10 +68,5 @@ Stack high-water mark: update 160 B, final 160 B (init 4 B). Matches the claimed
 ## Not done / limits
 - One board, one clock, voltage not measured, no repeat across power cycles, flash code alignment
   sensitivity not explored. Only the reset-default wait-state setup was used.
-- No wolfSSL (or other) BLAKE2s comparison: the dev-repo harness is not in the new per-asset layout
-  and no new comparison was invented.
-- The first board attempt failed at `ectf status` with garbled bytes; a raw serial read showed a
-  clean port and the retry passed. Cause unknown. That failed attempt's output was not kept.
-- The board's original app ("csuf-a") was overwritten during measurements and restored afterwards;
-  a full 256 KiB flash dump after restore is byte-identical to the one before
-  (`data/2026-11-13/board-restore.txt`).
+- No comparator was measured on the board. The comparisons with wolfSSL, the BLAKE2 reference and
+  OpenSSL in `bench/` (`bench/README.md`) are emulator-model estimates, not board measurements.

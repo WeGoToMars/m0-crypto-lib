@@ -16,7 +16,7 @@
  * - Calls are one level deep (compress and copy are leaves), and each call site
  *   passes f0 in the caller's [sp, #0] slot.
  * - Branches depend only on n, used and the low two bits of p and out.
- * - Instruction forms: only those of the ChaCha20-Poly1305 release unit (no ADR,
+ * - Instruction encodings: only those of the ChaCha20-Poly1305 release unit (no ADR,
  *   REV, BX); IV words are PC-relative literals.
  * Frames: init 4 bytes; update and final 24 bytes plus the callee's frame
  * (compress 136 including its 36 saved bytes, copy 20).
@@ -29,7 +29,7 @@
  * used) is caller memory and is not cleared; final consumes it.
  */
 #ifndef M0C_UNIT
-#error "assemble inside a unit that defines M0C_UNIT (src/m0crypto_blake2s.S or bench/hash/blake2s_unit.S)"
+#error "assemble src/m0crypto_blake2s.S (one relocation-free unit), not this file"
 #endif
 .syntax unified
 .thumb

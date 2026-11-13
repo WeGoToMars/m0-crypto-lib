@@ -621,7 +621,7 @@ def emit_x25519(g):
     op(g, 'sub', 'D', 'X3', 'Z3')
     # k_t = bit t of K; r7 = -(swap ^ k_t); swap = k_t.
     # Word offset 4 * (t >> 5) as (t >> 3) & 28: the mask bounds the index for the
-    # constant-time checker (proof-plan remedy B), one instruction more per step.
+    # constant-time proof (a bounded stack index), one instruction more per step.
     g(f'ldr r0, [sp, #{LV_T}]', 'lsrs r1, r0, #3', 'movs r2, #28', 'ands r1, r2',
       f'add r2, sp, #{S_K}',
       'ldr r1, [r2, r1]', 'rors r1, r0', 'movs r2, #1', 'ands r1, r2',

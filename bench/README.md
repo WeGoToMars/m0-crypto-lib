@@ -156,7 +156,7 @@ The CSV reports executed instructions and these measures:
 
 `code_bytes` sums the linked `.text` and `.rodata` input sections of each comparator's own objects after `--gc-sections`, excluding the harness and the shared runtime. The ChaCha20-Poly1305 chart's OpenSSL figures predate this accounting and also include the harness composition (2,430 bytes at `-Os`, against 2,020 for the kernels alone).
 
-Unicorn executes the instructions and the Python hook assigns modeled costs. These metrics are instruction-cost model estimates without flash wait-states, cache or bus contention. The only figure measured on hardware so far is for ChaCha20-Poly1305: on the reference [TI MSPM0L2228](https://www.ti.com/product/MSPM0L2228) silicon at 32 MHz, AEAD over 4,096 bytes executing from flash takes approximately 72 cycles per byte. BLAKE2s and X25519 have no hardware measurement in this suite yet.
+Unicorn executes the instructions and the Python hook assigns modeled costs. These metrics are instruction-cost model estimates without flash wait-states, cache or bus contention. Hardware figures are separate from this suite. BLAKE2s and X25519 of m0-crypto were measured on one MSPM0L2228 at the reset-default clock; the receipts are in [`board/`](board/README.md) and compare each count with this model. No comparator was measured on hardware.
 
 ## Licenses
 
