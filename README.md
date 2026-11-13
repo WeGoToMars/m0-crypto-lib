@@ -45,9 +45,17 @@ Benchmarked on physical MSPM0L2228 silicon running at 32 MHz, ChaCha20-Poly1305 
 tools/build_lib.sh
 ```
 
-This writes `build/lib/libm0crypto.a` and `MANIFEST.txt` (recording artifact hashes and toolchain metadata). It requires clang/LLVM 23.1.4 (see `tools/versions.txt`). Set `LLVM_BIN` if LLVM is not in `/opt/homebrew/opt/llvm/bin`.
+Each primitive is its own independently released asset, a relocation-free unit with its own proofs:
 
-Link `libm0crypto.a` and add `include/` to your compiler's include path. The library has no dynamic allocation, no static data, no relocations, and no external dependencies. Code size is 3,030 bytes. Peak stack usage is at most 176 bytes for ChaCha20 and 320 bytes for AEAD.
+| Asset | Source | Archive | `.text` |
+|---|---|---|---|
+| ChaCha20, ChaCha20-Poly1305 | `src/m0crypto_chacha20poly1305.S` | `build/lib/chacha20poly1305/libm0crypto_chacha20poly1305.a` | 3,030 bytes |
+| BLAKE2s-256 | `src/m0crypto_blake2s.S` | `build/lib/blake2s/libm0crypto_blake2s.a` | 4,748 bytes |
+| X25519 | `src/m0crypto_x25519.S` | `build/lib/x25519/libm0crypto_x25519.a` | 7,022 bytes |
+
+`tools/build_lib.sh` builds all three (or the assets named as arguments); each directory also holds `text.bin`, the verified bytes, and `MANIFEST.txt` (artifact hashes and toolchain metadata). It requires clang/LLVM 23.1.4 (see `tools/versions.txt`). Set `LLVM_BIN` if LLVM is not in `/opt/homebrew/opt/llvm/bin`.
+
+Link the archives of the assets you use and add `include/` to your compiler's include path. The library has no dynamic allocation, no static data, no relocations, and no external dependencies. The ChaCha20-Poly1305 asset is 3,030 bytes. Peak stack usage is at most 176 bytes for ChaCha20 and 320 bytes for AEAD.
 
 ## Test
 
@@ -62,7 +70,7 @@ Runs the library on QEMU's Cortex-M0 against [RFC 8439](https://www.rfc-editor.o
 Machine-checked proofs in [Lean 4](proofs/) verify the 3,030-byte release binary against [RFC 8439](https://www.rfc-editor.org/rfc/rfc8439) under an ARMv6-M machine model:
 
 - **Functional correctness**: ChaCha20, Poly1305, and AEAD match the specification for arbitrary buffer lengths and byte alignments, including in-place operation (`out == in`). Decryption verifies the tag before writing plaintext and leaves the output buffer untouched on authentication failure.
-- **Constant-time traces**: Executed instructions and memory access addresses depend only on public inputs (pointers, lengths, counter) and the decryption verdict, never on secret keys, nonces, or data.
+- **Constant-time traces**: For `m0c_chacha20_xor`, `m0c_chacha20poly1305_encrypt` and `m0c_chacha20poly1305_decrypt` (including the Poly1305 code they call), executed instructions and memory access addresses depend only on public inputs (pointers, lengths, counter) and the decryption verdict, never on secret keys, nonces, or data.
 - **Memory safety and stack bounds**: Memory accesses remain confined to caller buffers, code, and the stack frame. Peak stack usage is bounded to at most 176 bytes for ChaCha20 and 320 bytes for AEAD.
 - **ABI compliance and cleanup**: The stack pointer and callee-saved registers (r4–r11) are restored on return, and secret working state on the stack is zeroed.
 

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MIT
  * Internal void m0c_blake2s_copy(uint8_t *dst,const uint8_t *src,size_t n), the BLAKE2s
- * buffering copy.
+ * buffering copy. A local symbol of the release unit, called only by m0c_blake2s_update.
  * Disjoint accessible n-byte ranges, 1<=n<=64 (the only caller passes n>=8), any
  * byte alignment. Exactly n bytes written, reads stay within the source range.
  * AAPCS: preserves r4-r11/SP, clobbers r0-r3/APSR; 20-byte stack frame (r4-r7, lr),
@@ -24,7 +24,6 @@
     .section .text.m0c_blake2s_copy,"ax",%progbits
 #endif
 .p2align 2
-.global m0c_blake2s_copy
 .type m0c_blake2s_copy,%function
 .thumb_func
 m0c_blake2s_copy:

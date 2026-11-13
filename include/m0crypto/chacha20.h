@@ -7,12 +7,12 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "m0crypto/status.h"   /* M0C_OK */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define M0C_OK           0
 #define M0C_ERR_COUNTER (-1)
 
 /*

@@ -29,7 +29,7 @@
  * used) is caller memory and is not cleared; final consumes it.
  */
 #ifndef M0C_UNIT
-#error "assemble inside a unit that defines M0C_UNIT (src/m0crypto.S or bench/hash/blake2s_unit.S)"
+#error "assemble inside a unit that defines M0C_UNIT (src/m0crypto_blake2s.S or bench/hash/blake2s_unit.S)"
 #endif
 .syntax unified
 .thumb

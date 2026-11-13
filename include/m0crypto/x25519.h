@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "m0crypto/chacha20.h"   /* M0C_OK */
+#include "m0crypto/status.h"   /* M0C_OK */
 
 #ifdef __cplusplus
 extern "C" {

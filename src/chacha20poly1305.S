@@ -6,7 +6,8 @@
  * Public (include/m0crypto/chacha20poly1305.h):
  *   int m0c_chacha20poly1305_encrypt(out, tag, in, len, aad, aad_len, key, nonce)
  *   int m0c_chacha20poly1305_decrypt(out, tag, in, len, aad, aad_len, key, nonce)
- * Internal, global only so the test image can reach them (no public header):
+ * Internal (local symbols, no public header; the test image reaches them by offset, see
+ * tools/test_qemu.sh):
  *   void m0c_poly1305_init(uint32_t ctx[16], const uint8_t key[32]);  key 4-byte aligned
  *   void m0c_poly1305_blocks(uint32_t ctx[16], const uint8_t *m, size_t nblocks,
  *                            uint32_t padbit);
@@ -46,7 +47,7 @@
  * MULS is assumed fixed-latency, as on the reference Cortex-M0+.
  */
 #ifndef M0C_UNIT
-#error "assemble src/m0crypto.S (one relocation-free unit), not this file"
+#error "assemble src/m0crypto_chacha20poly1305.S (one relocation-free unit), not this file"
 #endif
     .syntax unified
     .thumb
@@ -137,7 +138,6 @@
 /* void m0c_poly1305_init(uint32_t ctx[16], const uint8_t key[32])
  * Internal: key must be 4-byte aligned (the AEAD passes its stack block). Straight-line. */
     .p2align 2
-    .global m0c_poly1305_init
     .type m0c_poly1305_init, %function
     .thumb_func
 m0c_poly1305_init:
@@ -176,7 +176,6 @@ m0c_poly1305_init:
  *                          uint32_t padbit)   padbit is 0 or 1 */
 #define PB_FRAME 28                 /* T0..T3, message pointer, block count, zeroed padding */
     .p2align 2
-    .global m0c_poly1305_blocks
     .type m0c_poly1305_blocks, %function
     .thumb_func
 m0c_poly1305_blocks:
@@ -345,7 +344,6 @@ m0c_poly1305_blocks:
  * tag = (h mod p + s) mod 2^128. On entry h < 2^130 + 2^128 < 2p, so one
  * conditional subtraction of p suffices; mod 2^128, h - p = h + 5. */
     .p2align 2
-    .global m0c_poly1305_finish
     .type m0c_poly1305_finish, %function
     .thumb_func
 m0c_poly1305_finish:

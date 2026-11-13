@@ -11,7 +11,8 @@ int check_call8(void *fn, const uint32_t args[8], uint32_t result[2]);
 extern uint32_t cc8_volatile[5];   /* r1, r2, r3, r12, lr as fn returned them */
 extern uint32_t stack_snapshot[128];
 
-/* Internal Poly1305 entry points (src/chacha20poly1305.S, no public header). */
+/* Internal Poly1305 entry points (src/chacha20poly1305.S): local symbols of the release object,
+   defined for this image by tools/test_qemu.sh from their offsets in that object. */
 void m0c_poly1305_init(uint32_t ctx[16], const uint8_t key[32]);
 void m0c_poly1305_blocks(uint32_t ctx[16], const uint8_t *m, size_t nblocks, uint32_t padbit);
 void m0c_poly1305_finish(uint32_t ctx[16], uint8_t tag[16]);

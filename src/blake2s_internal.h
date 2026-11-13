@@ -21,7 +21,10 @@ _Static_assert(offsetof(m0c_blake2s_ctx, h) == 0, "CTX_H");
 _Static_assert(offsetof(m0c_blake2s_ctx, count) == 32, "CTX_COUNT");
 _Static_assert(offsetof(m0c_blake2s_ctx, buf) == 40, "CTX_BUF");
 _Static_assert(offsetof(m0c_blake2s_ctx, used) == 104, "CTX_USED");
-/* One BLAKE2s compression (RFC 7693 F) with t = t1:t0 and f0, f1 = 0:
+/* m0c_blake2s_compress and m0c_blake2s_copy are local symbols of the release unit (no public
+ * header; only update and final call them). Their prototypes here document the contracts.
+ *
+ * One BLAKE2s compression (RFC 7693 F) with t = t1:t0 and f0, f1 = 0:
  * h[i] ^= v[i] ^ v[i+8] after ten rounds. f0 must be 0 (nonfinal block) or
  * 0xffffffff (final block): the code XORs any value into v14, but only these two are proved.
  * h[32] and block[64] are word aligned, accessible and disjoint; block includes

@@ -132,7 +132,7 @@ def compile_sources(flags: list[str]) -> list[Path]:
         WOLFSSL / "wolfcrypt/src/poly1305.c",
         WOLFSSL / "wolfcrypt/src/chacha20_poly1305.c",
     ]
-    objects = [ROOT / "build/lib/m0crypto.o"]
+    objects = [ROOT / "build/lib/chacha20poly1305/m0crypto_chacha20poly1305.o"]
     for index, source in enumerate(sources):
         destination = OUTPUT / f"{index}-{source.stem}.o"
         extra_flags = []
@@ -216,7 +216,7 @@ def write_manifest(
         "wolfssl_commit": WOLFSSL_COMMIT,
         "sources": sources,
         "inputs": local_input_hashes(),
-        "m0c_text_sha256": sha256(ROOT / "build/lib/text.bin"),
+        "m0c_text_sha256": sha256(ROOT / "build/lib/chacha20poly1305/text.bin"),
         "elf_sha256": sha256(OUTPUT / "bench.elf"),
     }
     (OUTPUT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

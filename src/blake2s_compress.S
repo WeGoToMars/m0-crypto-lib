@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: MIT
  * BLAKE2s compression (RFC 7693, section 3.2), ten unrolled rounds, in-place h update.
+ * Internal: a local symbol of the release unit, called only by m0c_blake2s_update/_final.
  * Contract: blake2s_internal.h. Single entry, no external calls, 136-byte frame.
  * Clearing: before returning, the 100 local bytes (message copy, v1..v7, h pointer,
  * padding) are overwritten with zeros by five fixed five-word STM batches, and
@@ -121,7 +122,6 @@
 .endm
 
 .p2align 2
-.global m0c_blake2s_compress
 .type m0c_blake2s_compress,%function
 .thumb_func
 m0c_blake2s_compress:
