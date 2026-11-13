@@ -18,3 +18,5 @@
 #include "blake2s_copy.S"
     .p2align 2
 #include "blake2s_stream.S"
+    .p2align 2
+#include "x25519.S"
