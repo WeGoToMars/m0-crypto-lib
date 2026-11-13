@@ -40,7 +40,7 @@ The build fetches source files pinned by revision and SHA-256 in `sources.lock.j
 
 - `build.py`: per-primitive configuration, source fetching, compilation, linking, code-size accounting and manifest generation.
 - `count.py`: workload generation, correctness verification, and CSV/JSON output.
-- `chart.py`: SVG summary charts, with one implementation order, name and color in every chart; m0-crypto is highlighted, and research implementations in assembly (x25519-cm0) are hatched and cited in a footnote. Cycles and stack come from `count.py`; code sizes are hand-entered constants, taken for BLAKE2s and X25519 from the `code_bytes` of the build manifests.
+- `chart.py`: SVG summary charts, with one implementation order, name and color in every chart; m0-crypto is highlighted, and research implementations in assembly (x25519-cm0) are hatched and cited in a footnote. Cycles come from the board and stack from `count.py`; code sizes are hand-entered constants, taken for BLAKE2s and X25519 from the `code_bytes` of the build manifests.
 - `armv6m.py`: Unicorn/Capstone execution harness, memory layout and instruction-cost model.
 - `reference.py`: independent Python calculations used to verify every call. They cover [RFC 8439](https://www.rfc-editor.org/rfc/rfc8439), [RFC 7693](https://www.rfc-editor.org/rfc/rfc7693) and [RFC 7748](https://www.rfc-editor.org/rfc/rfc7748).
 - `harness/`: one wrapper per implementation and operation (`run_IMPL_OP`). The wrappers share one argument block (`harness/job.h`).
@@ -132,7 +132,7 @@ Implementations:
 
 ## Counts and artifacts
 
-`build/bench/PRIMITIVE/` contains `bench.elf`, `bench.map`, `manifest.json`, `cycles.csv` and `cycles.json`. Charts are published to `bench/charts/PRIMITIVE/cycles_summary.svg` and `size_summary.svg`.
+`build/bench/PRIMITIVE/` contains `bench.elf`, `bench.map`, `manifest.json`, `cycles.csv` and `cycles.json`. `count.py` writes `bench/charts/PRIMITIVE/size_summary.svg`. The cycle charts `cycles_summary.svg` show board counts and come from `board/compare_summary.py --charts`.
 
 The manifests record:
 
@@ -156,7 +156,9 @@ The CSV reports executed instructions and these measures:
 
 `code_bytes` sums the linked `.text` and `.rodata` input sections of each comparator's own objects after `--gc-sections`, excluding the harness and the shared runtime. The ChaCha20-Poly1305 chart's OpenSSL figures predate this accounting and also include the harness composition (2,430 bytes at `-Os`, against 2,020 for the kernels alone).
 
-Unicorn executes the instructions and the Python hook assigns modeled costs. These metrics are instruction-cost model estimates without flash wait-states, cache or bus contention. Hardware figures are separate from this suite. BLAKE2s and X25519 of m0-crypto were measured on one MSPM0L2228 at the reset-default clock; the receipts are in [`board/`](board/README.md) and compare each count with this model. No comparator was measured on hardware.
+Unicorn executes the instructions and the Python hook assigns modeled costs. These metrics are instruction-cost model estimates without flash wait-states, cache or bus contention.
+
+The same objects also ran on one MSPM0L2228 at the reset-default clock, code in flash, through the same wrappers ([`board/`](board/README.md)). The board counts are 3-23% above the zero-wait model and 1-7% above the model plus one cycle per store.
 
 ## Licenses
 

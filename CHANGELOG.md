@@ -16,7 +16,7 @@
 - Proofs: functional correctness, constant-time traces, read bounds and stack bounds for every exported function of all three assets, under one claim policy (`proofs/README.md`; review guide `proofs/docs/REVIEW.md`).
 - The Poly1305 entry points are no longer exported. They never had a public header.
 - Headers list the preconditions the proofs assume and say which clearing is proved.
-- Benchmarks and MSPM0L2228 board measurements for BLAKE2s and X25519 (`bench/`, `bench/board/`).
+- Benchmarks of all three assets and their comparators, in the cycle model and on an MSPM0L2228 board (`bench/`, `bench/board/`).
 
 ## 0.2.0
 

@@ -261,7 +261,7 @@ def cycles_per_byte(rows: list[dict], impls, operation: str, alignment: str) -> 
     for row in rows:
         length = int(row["bytes"])
         if row["op"] == operation and row["alignment"] == alignment and length > 0:
-            data[row["impl"]][f"{length} B"] = int(row["zero_wait_cycles"]) / length
+            data[row["impl"]][f"{length} B"] = int(row["board_cycles"]) / length
     return data
 
 
@@ -291,7 +291,7 @@ def chacha_cycles_chart(rows: list[dict]) -> str:
     y_title = "Cycles / Byte (lower is better)"
     return dashboard(
         "Cortex-M0+ ChaCha20-Poly1305 Performance",
-        "Cycles per byte (lower is better) · ARM DDI 0484B zero-wait-state model",
+        "Cycles per byte (lower is better) · measured on one TI MSPM0L2228, code in flash",
         "TI MSPM0L2228 reference configuration (single-cycle hardware multiplier, "
         f"{ALIGNMENT_TEXT[alignment]}, {rows[0]['aad_bytes']}-byte AAD)",
         impls,
@@ -308,7 +308,7 @@ def blake2s_cycles_chart(rows: list[dict]) -> str:
     y_title = "Cycles / Byte (lower is better)"
     return dashboard(
         "Cortex-M0+ BLAKE2s-256 Performance",
-        "Cycles per byte, init + update + final (lower is better) · ARM DDI 0484B zero-wait-state model",
+        "Cycles per byte, init + update + final (lower is better) · measured on one TI MSPM0L2228, code in flash",
         "TI MSPM0L2228 reference configuration (single-cycle hardware multiplier, "
         f"{ALIGNMENT_TEXT[alignment]}, unkeyed 32-byte digest)",
         impls,
@@ -324,11 +324,11 @@ def x25519_cycles_chart(rows: list[dict]) -> str:
     data = {impl: {} for impl in impls}
     for row in rows:
         if row["input"] == "rfc7748-6.1" and row["alignment"] == alignment:
-            data[row["impl"]][groups[row["op"]]] = int(row["zero_wait_cycles"]) / 1000
+            data[row["impl"]][groups[row["op"]]] = int(row["board_cycles"]) / 1000
     return dashboard(
         "Cortex-M0+ X25519 Performance",
         "Thousands of cycles per scalar multiplication (lower is better) · "
-        "ARM DDI 0484B zero-wait-state model",
+        "measured on one TI MSPM0L2228, code in flash",
         "TI MSPM0L2228 reference configuration (single-cycle hardware multiplier, "
         f"{ALIGNMENT_TEXT[alignment]}, RFC 7748 section 6.1 keys)",
         impls,
@@ -381,8 +381,16 @@ CYCLES_CHARTS = {
 
 
 def write_charts(primitive: str, rows: list[dict], directory: Path) -> list[Path]:
+    """The size chart, from count.py rows."""
     directory.mkdir(parents=True, exist_ok=True)
-    paths = [directory / "cycles_summary.svg", directory / "size_summary.svg"]
-    paths[0].write_text(CYCLES_CHARTS[primitive](rows))
-    paths[1].write_text(size_chart(primitive, rows))
-    return paths
+    path = directory / "size_summary.svg"
+    path.write_text(size_chart(primitive, rows))
+    return [path]
+
+
+def write_cycles_chart(primitive: str, rows: list[dict], directory: Path) -> Path:
+    """The cycles chart, from bench/board/compare_summary.py rows ("board_cycles")."""
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "cycles_summary.svg"
+    path.write_text(CYCLES_CHARTS[primitive](rows))
+    return path
