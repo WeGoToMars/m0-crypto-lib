@@ -21,9 +21,8 @@ for a in $ASSETS; do
     esac
 done
 
-LLVM_BIN=${LLVM_BIN:-/opt/homebrew/opt/llvm/bin}
 EXPECT_CLANG=$(sed -n 's/^clang=//p' "$ROOT/tools/versions.txt")
-GOT_CLANG=$("$LLVM_BIN/clang" --version | sed -n '1s/.*clang version \([0-9.]*\).*/\1/p')
+GOT_CLANG=$(clang --version | sed -n '1s/.*clang version \([0-9.]*\).*/\1/p')
 if [ "$GOT_CLANG" != "$EXPECT_CLANG" ]; then
     echo "toolchain mismatch: clang $GOT_CLANG (want $EXPECT_CLANG)" >&2
     exit 1
@@ -35,15 +34,15 @@ for a in $ASSETS; do
     U="m0crypto_$a"
     rm -rf "$OUT"
     mkdir -p "$OUT"
-    "$LLVM_BIN/clang" --target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb \
+    clang --target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb \
         -Wall -Werror -ffile-prefix-map="$ROOT"=. -I "$ROOT/src" \
         -c "$ROOT/src/$U.S" -o "$OUT/$U.o"
-    "$LLVM_BIN/llvm-ar" rcsD "$OUT/lib$U.a" "$OUT/$U.o"
-    "$LLVM_BIN/llvm-objcopy" -O binary --only-section=.text "$OUT/$U.o" "$OUT/text.bin"
+    llvm-ar rcsD "$OUT/lib$U.a" "$OUT/$U.o"
+    llvm-objcopy -O binary --only-section=.text "$OUT/$U.o" "$OUT/text.bin"
 
     # A release unit must be relocation-free, so its .text is the same at any
     # 4-byte-aligned link address.
-    if "$LLVM_BIN/llvm-readelf" -S "$OUT/$U.o" | grep -q ' \.rel'; then
+    if llvm-readelf -S "$OUT/$U.o" | grep -q ' \.rel'; then
         echo "build_lib: $U.o has relocations" >&2; exit 1
     fi
 
@@ -57,7 +56,7 @@ for a in $ASSETS; do
         echo "object_sha256=$(sha "$OUT/$U.o")"
         echo "archive_sha256=$(sha "$OUT/lib$U.a")"
         echo "symbols:"
-        "$LLVM_BIN/llvm-nm" --defined-only -S "$OUT/$U.o" | grep ' T ' | sed 's/^/  /'
+        llvm-nm --defined-only -S "$OUT/$U.o" | grep ' T ' | sed 's/^/  /'
     } > "$OUT/MANIFEST.txt"
     cat "$OUT/MANIFEST.txt"
 done

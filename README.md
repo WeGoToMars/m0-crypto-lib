@@ -92,7 +92,7 @@ Each primitive is its own independently released asset, a relocation-free unit w
 | BLAKE2s-256 | `src/m0crypto_blake2s.S` | `build/lib/blake2s/libm0crypto_blake2s.a` | 4,748 bytes |
 | X25519 | `src/m0crypto_x25519.S` | `build/lib/x25519/libm0crypto_x25519.a` | 7,022 bytes |
 
-`tools/build_lib.sh` builds all three (or the assets named as arguments); each directory also holds `text.bin`, the verified bytes, and `MANIFEST.txt` (artifact hashes and toolchain metadata). It requires clang/LLVM 23.1.4 (see `tools/versions.txt`). Set `LLVM_BIN` if LLVM is not in `/opt/homebrew/opt/llvm/bin`.
+`tools/build_lib.sh` builds all three (or the assets named as arguments); each directory also holds `text.bin`, the verified bytes, and `MANIFEST.txt` (artifact hashes and toolchain metadata). It requires clang/LLVM 23.1.4 on `PATH` (see `tools/versions.txt`).
 
 Link the archives of the assets you use and add `include/` to your compiler's include path. The library has no dynamic allocation, no static data, no relocations, and no external dependencies. Peak stack usage below the caller's SP is at most 176 bytes for ChaCha20, 320 bytes for AEAD, 4 bytes for `m0c_blake2s_init`, 160 bytes for `m0c_blake2s_update` and `m0c_blake2s_final`, and 516 bytes for X25519.
 

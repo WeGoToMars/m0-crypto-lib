@@ -11,8 +11,6 @@ ASSET=${1:?asset: blake2s or x25519}
 PLACE=${2:?placement: flash or sram}
 case "$ASSET" in blake2s|x25519) ;; *) echo "unknown asset" >&2; exit 2 ;; esac
 case "$PLACE" in flash|sram) ;; *) echo "unknown placement" >&2; exit 2 ;; esac
-LLVM_BIN=${LLVM_BIN:-/opt/homebrew/opt/llvm/bin}
-LLD_BIN=${LLD_BIN:-/opt/homebrew/opt/lld/bin}
 B=$ROOT/bench/board
 FW=$B/firmware
 OUT=$ROOT/build/board/$ASSET-$PLACE
@@ -21,7 +19,7 @@ LIB=$ROOT/build/lib/$ASSET
 rm -rf "$OUT"; mkdir -p "$OUT"
 BASE="--target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections"
 FLAGS="$BASE -O2 -ffreestanding -fno-builtin -Wall -Wextra -Werror"
-CC=$LLVM_BIN/clang
+CC=clang
 "$CC" $FLAGS -I "$ROOT/include" -I "$B" -c "$B/$ASSET.c" -o "$OUT/main.o"
 "$CC" $FLAGS -I "$B" -c "$B/common.c" -o "$OUT/common.o"
 "$CC" $FLAGS -c "$FW/bench_uart.c" -o "$OUT/uart.o"
@@ -30,13 +28,13 @@ CC=$LLVM_BIN/clang
 "$CC" $BASE -DUART_OUT -c "$ROOT/tests/startup.S" -o "$OUT/startup.o"
 case "$PLACE" in flash) SECT=$FW/sections-flash.ld ;; sram) SECT=$FW/sections-sram.ld ;; esac
 cat "$FW/memory-mspm0l2228-ectf.ld" "$SECT" > "$OUT/link.ld"
-"$LLD_BIN/ld.lld" -T "$OUT/link.ld" --gc-sections --build-id=none -Map "$OUT/bench.map" \
+ld.lld -T "$OUT/link.ld" --gc-sections --build-id=none -Map "$OUT/bench.map" \
     -o "$OUT/bench.elf" "$OUT/startup.o" "$OUT/main.o" "$OUT/common.o" "$OUT/support.o" \
     "$OUT/libc.o" "$OUT/uart.o" "$LIB/m0crypto_$ASSET.o"
-"$LLVM_BIN/llvm-objcopy" -O binary "$OUT/bench.elf" "$OUT/bench.bin"
+llvm-objcopy -O binary "$OUT/bench.elf" "$OUT/bench.bin"
 cp "$LIB/text.bin" "$OUT/text.bin"
-"$LLVM_BIN/llvm-size" "$OUT/bench.elf" > "$OUT/size.txt"
-"$LLVM_BIN/llvm-nm" -S -n "$OUT/bench.elf" > "$OUT/symbols.txt"
+llvm-size "$OUT/bench.elf" > "$OUT/size.txt"
+llvm-nm -S -n "$OUT/bench.elf" > "$OUT/symbols.txt"
 python3 -I - "$OUT" "$LIB" "$ASSET" "$PLACE" <<'PY'
 import hashlib, sys
 out, lib, asset, place = sys.argv[1:]

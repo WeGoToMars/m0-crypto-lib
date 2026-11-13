@@ -17,15 +17,13 @@ for a in $ASSETS; do
     esac
 done
 has() { case " $ASSETS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
-LLVM_BIN=${LLVM_BIN:-/opt/homebrew/opt/llvm/bin}
-LLD_BIN=${LLD_BIN:-/opt/homebrew/opt/lld/bin}
 QEMU=${QEMU:-qemu-system-arm}
 OUT="$ROOT/build/test"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 CFLAGS="--target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb -Os -ffreestanding -fno-builtin -fno-unwind-tables -fno-asynchronous-unwind-tables -nostdlib -Wall -Wextra -Werror"
 T="$ROOT/tests"
-cc() { "$LLVM_BIN/clang" $CFLAGS -I "$ROOT/include" -I "$ROOT/src" -I "$ROOT/tests" -c "$1" -o "$OUT/$(basename "$1").o"; }
+cc() { clang $CFLAGS -I "$ROOT/include" -I "$ROOT/src" -I "$ROOT/tests" -c "$1" -o "$OUT/$(basename "$1").o"; }
 # Each image links only its own release asset (relocation-free unit).
 cc "$T/startup.S"
 cc "$T/check_call8.S"
@@ -39,7 +37,7 @@ if has blake2s; then cc "$ROOT/src/m0crypto_blake2s.S"; cc "$T/test_blake2s.c"; 
 if has x25519; then cc "$ROOT/src/m0crypto_x25519.S"; cc "$T/test_x25519.c"; fi
 link() {   # link IMAGE OBJ...
     img=$1; shift
-    "$LLD_BIN/ld.lld" -T "$T/microbit.ld" --build-id=none -o "$OUT/$img.elf" "$@"
+    ld.lld -T "$T/microbit.ld" --build-id=none -o "$OUT/$img.elf" "$@"
     echo "built $OUT/$img.elf"
 }
 O=$OUT
@@ -51,7 +49,7 @@ link test_chacha20 "$O/startup.S.o" "$O/m0crypto_chacha20poly1305.S.o" "$O/check
 # The Poly1305 entry points are local symbols of the release object (not exported). test_aead
 # calls them directly, so its link defines each name as m0c_chacha20_xor (offset 0, Thumb bit
 # set) plus the function's offset in the same object: the test runs the release bytes unchanged.
-nmoff() { "$LLVM_BIN/llvm-nm" "$O/m0crypto_chacha20poly1305.S.o" | awk -v s="$1" '$2 == "t" && $3 == s { print $1 }'; }
+nmoff() { llvm-nm "$O/m0crypto_chacha20poly1305.S.o" | awk -v s="$1" '$2 == "t" && $3 == s { print $1 }'; }
 P1305=""
 for f in m0c_poly1305_init m0c_poly1305_blocks m0c_poly1305_finish; do
     off=$(nmoff "$f")
@@ -69,7 +67,7 @@ fi
 if has x25519; then
 IMAGES="$IMAGES test_x25519"
 # m0c_x25519 uses 516 bytes of stack: check_call8 paints and snapshots 1,024 bytes here.
-"$LLVM_BIN/clang" $CFLAGS -DCC8_BYTES=1024 -c "$T/check_call8.S" -o "$O/check_call8_1k.S.o"
+clang $CFLAGS -DCC8_BYTES=1024 -c "$T/check_call8.S" -o "$O/check_call8_1k.S.o"
 link test_x25519 "$O/startup.S.o" "$O/m0crypto_x25519.S.o" \
     "$O/check_call8_1k.S.o" "$O/test_x25519.c.o"
 fi

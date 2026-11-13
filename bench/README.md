@@ -24,7 +24,7 @@ This needs:
 
 - Python 3, git and `uv`
 - network access on the first build
-- LLVM/LLD 23.1.4 (`LLVM_BIN` and `LLD_BIN` select the tool directories).
+- LLVM/LLD 23.1.4 on `PATH`.
 
 `BENCH_OPT=-O2` or `-O3` sets the C optimization level; the default is `-Os` for every C comparator. `tools/build_lib.sh` builds the m0-crypto object of the asset.
 
