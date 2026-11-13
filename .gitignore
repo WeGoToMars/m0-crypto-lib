@@ -3,3 +3,4 @@
 /bench/third_party/
 __pycache__/
 *.py[cod]
+/bench/board/data/

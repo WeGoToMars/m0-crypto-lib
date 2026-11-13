@@ -1,4 +1,3 @@
-ENTRY(run_m0c_chacha)
 
 MEMORY {
     FLASH (rx) : ORIGIN = 0, LENGTH = 256K

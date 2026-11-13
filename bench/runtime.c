@@ -43,6 +43,13 @@ void __aeabi_memcpy4(void *d, const void *s, size_t n) { memcpy(d, s, n); }
 void __aeabi_memcpy8(void *d, const void *s, size_t n) { memcpy(d, s, n); }
 
 void OPENSSL_cleanse(void *p, size_t n) { memset(p, 0, n); }
+/* OpenSSL's portable C CRYPTO_memcmp (crypto/cpuid.c): branch-free byte comparison. */
+int CRYPTO_memcmp(const void *in_a, const void *in_b, size_t len) {
+    const volatile unsigned char *a = in_a, *b = in_b;
+    unsigned char x = 0;
+    for (size_t i = 0; i < len; i++) x |= a[i] ^ b[i];
+    return x;
+}
 int memcmp(const void *a, const void *b, size_t n) {
  const unsigned char *x=a,*y=b;
  for (size_t i=0;i<n;i++) if(x[i]!=y[i]) return x[i]<y[i]?-1:1;

@@ -23,6 +23,28 @@ m0-crypto achieves approximately 2x better performance than existing libraries a
 
 > Note: None of the libraries tested provide an optimized assembly implementation, only portable C.
 
+### BLAKE2s-256
+
+In the cycle model, m0-crypto takes 1.4x to 2.4x fewer cycles than wolfSSL, the BLAKE2 reference implementation and OpenSSL. This holds for one update call and for 16-byte updates, from 64 to 4,096 bytes.
+
+![Cortex-M0+ BLAKE2s-256 Performance](bench/charts/blake2s/cycles_summary.svg)
+
+![Cortex-M0+ BLAKE2s-256 Memory Footprint](bench/charts/blake2s/size_summary.svg)
+
+> Note: The three comparators are portable C.
+
+### X25519
+
+In the cycle model, one scalar multiplication takes 3,289,592 cycles, the same for every input. Thomas Pornin's hand-written Cortex-M0 assembly, [x25519-cm0](https://github.com/pornin/x25519-cm0), takes 3,229,917 cycles, 1.8% fewer. It also uses 640 bytes of stack against 516, and 8,850 bytes of flash against 7,022.
+
+The portable C implementations take about 3.5x more cycles.
+
+![Cortex-M0+ X25519 Performance](bench/charts/x25519/cycles_summary.svg)
+
+![Cortex-M0+ X25519 Memory Footprint](bench/charts/x25519/size_summary.svg)
+
+> Note: These figures are instruction-cost model estimates. Only the ChaCha20-Poly1305 figure below has been measured on hardware.
+
 ## Reference Hardware: TI MSPM0L2228
 
 The reference microcontroller for this library is the [Texas Instruments MSPM0L2228](https://www.ti.com/product/MSPM0L2228), an Arm Cortex-M0+ microcontroller running up to 32 MHz with 256 KB flash and 32 KB SRAM. Several platform-specific properties directly inform this implementation and its benchmark model.
@@ -81,7 +103,7 @@ The proofs assume sequential execution in ordinary memory without interrupts, co
 
 ## Cycle Comparison
 
-See [bench/README.md](bench/README.md) for the Cortex-M0+ cycle-count harness comparing m0-crypto, wolfSSL, Monocypher, and OpenSSL.
+See [bench/README.md](bench/README.md) for the Cortex-M0+ cycle-count harness. It compares m0-crypto with wolfSSL, Monocypher and OpenSSL, plus the BLAKE2 reference implementation for BLAKE2s and x25519-cm0 for X25519.
 
 ## Verifying the Proofs
 

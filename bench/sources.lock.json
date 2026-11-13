@@ -43,5 +43,55 @@
     "path": "openssl/LICENSE.txt",
     "url": "https://raw.githubusercontent.com/openssl/openssl/636dfadc70ce26f2473870570bfd9ec352806b1d/LICENSE.txt",
     "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+  },
+  {
+    "path": "openssl/providers/implementations/digests/blake2s_prov.c",
+    "url": "https://raw.githubusercontent.com/openssl/openssl/636dfadc70ce26f2473870570bfd9ec352806b1d/providers/implementations/digests/blake2s_prov.c",
+    "sha256": "72fb44ea296baa5dc9d8eec7f3ee90ee112ae7cc33545a4921fe3b3c58c5c792"
+  },
+  {
+    "path": "openssl/providers/implementations/digests/blake2_impl.h",
+    "url": "https://raw.githubusercontent.com/openssl/openssl/636dfadc70ce26f2473870570bfd9ec352806b1d/providers/implementations/digests/blake2_impl.h",
+    "sha256": "72f4114d099dfcbe886a0218c87a067cd47e43e1c74d0d0d3ecab8b5d6356508"
+  },
+  {
+    "path": "openssl/providers/implementations/include/prov/blake2.h",
+    "url": "https://raw.githubusercontent.com/openssl/openssl/636dfadc70ce26f2473870570bfd9ec352806b1d/providers/implementations/include/prov/blake2.h",
+    "sha256": "a154db9e3262cebfa9019d546fd4a7331158839b1c0609d02bd2cc31e9be78f2"
+  },
+  {
+    "path": "openssl/crypto/ec/curve25519.c",
+    "url": "https://raw.githubusercontent.com/openssl/openssl/636dfadc70ce26f2473870570bfd9ec352806b1d/crypto/ec/curve25519.c",
+    "sha256": "068eebad719e281c3758d8b55d200cd51dbac93426d901e807dd8111bc63e758"
+  },
+  {
+    "path": "blake2/ref/blake2s-ref.c",
+    "url": "https://raw.githubusercontent.com/BLAKE2/BLAKE2/ed1974ea83433eba7b2d95c5dcd9ac33cb847913/ref/blake2s-ref.c",
+    "sha256": "645fb0212db0d6e15a1568da210ac3f7123da1ab4330d4fc0e33312d742d569a"
+  },
+  {
+    "path": "blake2/ref/blake2.h",
+    "url": "https://raw.githubusercontent.com/BLAKE2/BLAKE2/ed1974ea83433eba7b2d95c5dcd9ac33cb847913/ref/blake2.h",
+    "sha256": "389bc87a83cdd9e25569a294d01a3347970d117237a66eee9df8edd6058736a4"
+  },
+  {
+    "path": "blake2/ref/blake2-impl.h",
+    "url": "https://raw.githubusercontent.com/BLAKE2/BLAKE2/ed1974ea83433eba7b2d95c5dcd9ac33cb847913/ref/blake2-impl.h",
+    "sha256": "bc0ead7f3259a415325fa40ddebb1876f903d5062d888fc5994e8b2d9e616ec4"
+  },
+  {
+    "path": "blake2/COPYING",
+    "url": "https://raw.githubusercontent.com/BLAKE2/BLAKE2/ed1974ea83433eba7b2d95c5dcd9ac33cb847913/COPYING",
+    "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+  },
+  {
+    "path": "x25519-cm0/src/x25519-cm0.S",
+    "url": "https://raw.githubusercontent.com/pornin/x25519-cm0/75a53f277d15acd9a0a8e220c8e26a48cc8974c2/src/x25519-cm0.S",
+    "sha256": "d4126985fcc422bd715bae2d7bed48450a39138c5680314ae2411b0d794d6f1f"
+  },
+  {
+    "path": "x25519-cm0/LICENSE",
+    "url": "https://raw.githubusercontent.com/pornin/x25519-cm0/75a53f277d15acd9a0a8e220c8e26a48cc8974c2/LICENSE",
+    "sha256": "08e9fb10052ea24538041e1577399ff645f3ec3c524c3a2267a331c9924a547d"
   }
 ]

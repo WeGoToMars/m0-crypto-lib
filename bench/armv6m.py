@@ -14,7 +14,7 @@ FLASH_BYTES = 256 * 1024
 RAM_BASE = 0x20200000
 RAM_BYTES = 32 * 1024
 RETURN_ADDRESS = 0x3FF00
-INSTRUCTION_LIMIT = 20_000_000
+INSTRUCTION_LIMIT = 20_000_000  # per call; callers may raise it
 JOB_FORMAT = struct.Struct("<8Ii")  # Matches Job in harness.c.
 STATUS_OFFSET = 32
 OUTPUT_SENTINEL = b"\xa5"
@@ -67,6 +67,7 @@ SINGLE_CYCLE_INSTRUCTIONS = {
     "muls",
     "nop",
     "cmn",
+    "adr",
 }
 
 
@@ -207,6 +208,7 @@ class Runner:
         aad: bytes,
         message: bytes,
         tag: bytes,
+        output_length: int,
     ) -> tuple[unicorn.Uc, list[int]]:
         machine = unicorn.Uc(
             unicorn.UC_ARCH_ARM, unicorn.UC_MODE_THUMB | unicorn.UC_MODE_MCLASS
@@ -218,7 +220,7 @@ class Runner:
 
         machine.mem_write(buffers.source, message or b"\0")
         if buffers.source != buffers.output:
-            machine.mem_write(buffers.output, OUTPUT_SENTINEL * max(1, len(message)))
+            machine.mem_write(buffers.output, OUTPUT_SENTINEL * max(1, output_length))
         machine.mem_write(buffers.key, key)
         machine.mem_write(buffers.nonce, nonce)
         machine.mem_write(buffers.aad, aad or b"\0")
@@ -238,7 +240,7 @@ class Runner:
 
         guards = [
             buffers.output - 1,
-            buffers.output + len(message),
+            buffers.output + output_length,
             buffers.tag - 1,
             buffers.tag + 16,
         ]
@@ -259,9 +261,17 @@ class Runner:
         message: bytes,
         tag: bytes,
         alignment: str,
+        output_length: int | None = None,
+        instruction_limit: int = INSTRUCTION_LIMIT,
     ) -> CallResult:
+        """Run one wrapper. The output buffer holds output_length bytes (default:
+        the message length) and is checked for overruns on both sides."""
+        if output_length is None:
+            output_length = len(message)
         buffers = Buffers.for_alignment(alignment)
-        machine, guards = self.prepare_call(buffers, key, nonce, aad, message, tag)
+        machine, guards = self.prepare_call(
+            buffers, key, nonce, aad, message, tag, output_length
+        )
         state_symbol = self.symbols.get(f"caller_state_{implementation}_{operation}")
         counts = Counts(caller_state=self.read_word(state_symbol[0]) if state_symbol else 0)
         wrapper, wrapper_size = self.symbols[f"run_{implementation}_{operation}"]
@@ -286,7 +296,7 @@ class Runner:
             counts.store_units += stores
 
         machine.hook_add(unicorn.UC_HOOK_CODE, count_instruction)
-        machine.emu_start(wrapper | 1, RETURN_ADDRESS, count=INSTRUCTION_LIMIT)
+        machine.emu_start(wrapper | 1, RETURN_ADDRESS, count=instruction_limit)
         if machine.reg_read(arm_const.UC_ARM_REG_PC) != RETURN_ADDRESS:
             raise RuntimeError("call did not return before the instruction limit")
         if machine.reg_read(arm_const.UC_ARM_REG_SP) != buffers.stack:
@@ -298,7 +308,7 @@ class Runner:
         status_bytes = machine.mem_read(buffers.job + STATUS_OFFSET, 4)
         return CallResult(
             status=struct.unpack("<i", status_bytes)[0],
-            output=bytes(machine.mem_read(buffers.output, len(message))),
+            output=bytes(machine.mem_read(buffers.output, output_length)),
             tag=bytes(machine.mem_read(buffers.tag, 16)),
             counts=counts,
         )
