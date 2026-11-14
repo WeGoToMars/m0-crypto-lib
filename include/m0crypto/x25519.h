@@ -26,7 +26,8 @@ extern "C" {
  *   the 32 output bytes in constant time.
  * - Stack: 516 bytes below the entry SP.
  * - Clearing: returns with r0-r3 and r12 zero, and zeroes the 480 bytes of stack below
- *   its saved registers (its frame and the stack its internal routines used).
+ *   its saved registers (its frame and the stack its internal routines used). The 36
+ *   bytes above them hold the caller's r4-r11 and LR as saved at entry.
  * - Proved in proofs/ (docs/REVIEW.md section 9) against the Lean model of these exact
  *   bytes: the result, the clearing above, the stack bound, the read regions, and a
  *   trace that depends only on the addresses and LR, not on the scalar or point.

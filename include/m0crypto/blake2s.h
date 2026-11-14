@@ -39,10 +39,13 @@ _Static_assert(sizeof(m0c_blake2s_ctx) == 112, "ARM32 context layout changed");
  *   return addresses. They never depend on message bytes or on the hash state (proved in
  *   Lean under the machine model, see proofs/).
  * - Stack (proved): init 4 bytes; update and final 160 bytes below the entry SP.
- * - Clearing (proved): update and final return with r0-r3 zero. The internal
- *   compression routine overwrites its 100 bytes of working state (message copy, v1..v7,
- *   h pointer, padding) with zeros before it returns. The context is caller memory, and
- *   the caller wipes it.
+ * - Clearing (proved): update and final return with r0-r3 zero, final also r12; init
+ *   returns with r12 unchanged and r0-r3 fixed by the context pointer. Every byte of the
+ *   stack window at return depends only on the caller's registers at entry, the number
+ *   of pending bytes and, for update, the window's bytes at entry: never on message bytes
+ *   or the hash state. Each compression zeroes its 100 bytes of working state (message
+ *   copy, v1..v7, h pointer, padding) before it returns. The context is caller memory,
+ *   and the caller wipes it.
  * - Preconditions of the proofs (Blake2s.Init.Pre, Blake2s.Update.Pre and
  *   Blake2s.Final.Pre in proofs/). SP is the stack pointer at entry; W is the stack
  *   window [SP-4, SP) for init and [SP-160, SP) for update and final. "code" is the

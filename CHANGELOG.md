@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1
+
+- Same machine code as 0.3.0: every asset keeps its `.text` and SHA-256.
+- `m0crypto/status.h` is removed. `chacha20.h` and `x25519.h` define `M0C_OK` themselves, so no two archives contain the same file.
+- Proved: no key, message or other secret is left on the stack or in scratch registers when a function returns.
+- New release archive per asset, with the prebuilt library, its headers and an assembly file that any ARM assembler turns into the same verified machine code.
+- New tests: ChaCha20 at the 2^32 block-counter limit.
+- CI on GitHub Actions.
+
 ## 0.3.0
 
 - Adds unkeyed BLAKE2s-256 (RFC 7693): `m0c_blake2s_init`, `m0c_blake2s_update`, `m0c_blake2s_final` (`include/m0crypto/blake2s.h`). 112-byte caller context; stack 160 bytes.

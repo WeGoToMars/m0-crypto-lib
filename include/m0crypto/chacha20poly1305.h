@@ -38,10 +38,12 @@ extern "C" {
  *   the tag verifies. They never depend on key, nonce, tag, AAD, or payload bytes.
  * - Stack bounds (proved): stack usage stays within 320 bytes below the entry SP
  *   at every instruction.
- * - Clearing (proved): on return the 96 bytes [SP-136, SP-40) of the function's own
- *   frame (Poly1305 context, one-time key, lengths and expected tag) are zero, and r1-r3 are zero.
- * - Clearing (tested in tests/test_aead.c): the frames of the internal ChaCha20 and
- *   Poly1305 calls below SP-144 and r12 are zero after the call.
+ * - Clearing (proved): on return r1-r3 and r12 are zero, and so are the 140 bytes
+ *   [SP-320, SP-180) of the internal ChaCha20 and Poly1305 frames and the 96 bytes
+ *   [SP-136, SP-40) of the function's own frame (Poly1305 context, one-time key,
+ *   lengths and expected tag). Every byte of [SP-320, SP) is a function of only the
+ *   entry registers, the nonce pointer, the bytes there at entry and, for decryption,
+ *   whether the tag verified.
  * - Preconditions of the proofs (Aead.APre in proofs/). SP is the stack pointer at
  *   entry. "code" is the 3,030-byte .text of the linked m0crypto_chacha20poly1305 object.
  *   "A disjoint from B" means both address ranges end at or below 2^32 and do not

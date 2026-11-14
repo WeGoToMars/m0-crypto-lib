@@ -156,7 +156,7 @@ proofs/tools/check.sh              # every asset; requires Lean v4.35.0 (elan), 
 proofs/tools/check.sh blake2s      # one asset
 ```
 
-`check.sh` rebuilds each object, checks its bytes against the proofs, builds the proofs, audits their axioms and compares the Lean model with QEMU on sampled calls.
+`check.sh` rebuilds each object, checks its bytes against the proofs, builds the proofs, audits their axioms and compares the Lean model with QEMU after every instruction a call can execute.
 
 > [!IMPORTANT]
 > Physical side channels (power analysis, fault injection) are out of scope. Callers keep nonces unique per key, reject low-order X25519 points where their protocol requires it, and wipe the BLAKE2s context.

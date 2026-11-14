@@ -32,9 +32,10 @@ extern "C" {
  * - Read bounds (proved): reads stay strictly within in, key, nonce, the code,
  *   and the 176-byte stack frame plus the two stack arguments.
  * - Stack (proved): 176 bytes below the entry SP.
- * - Clearing (proved): when the call returns M0C_OK and len != 0, the 140 bytes
- *   [SP-176, SP-36) holding key-derived working state are zero on return. The 36
- *   saved bytes above them hold the caller's registers.
+ * - Clearing (proved): when the call returns M0C_OK and len != 0, r1-r3, r12 and the
+ *   140 bytes [SP-176, SP-36) holding key-derived working state are zero on return.
+ *   Otherwise they keep their entry values. The 36 bytes above them hold the
+ *   caller's r4-r11 and LR.
  * - Preconditions of the proofs (ChaCha20Xor.Pre in proofs/). SP is the stack pointer at
  *   entry. "code" is the 3,030-byte .text of the linked m0crypto_chacha20poly1305 object.
  *   "A disjoint from B" means both address ranges end at or below 2^32 and do not
