@@ -9,12 +9,7 @@
 #define M0C_BLAKE2S_INTERNAL_H
 #include <stddef.h>
 #include <stdint.h>
-typedef struct {
-    uint32_t h[8];
-    uint64_t count; /* message bytes compressed so far (pending bytes excluded), RFC 7693 t */
-    uint8_t buf[64];
-    size_t used;
-} m0c_blake2s_ctx;
+#include "m0crypto/blake2s.h"   /* m0c_blake2s_ctx */
 /* blake2s_stream.S hard-codes these offsets (CTX_*). */
 _Static_assert(sizeof(m0c_blake2s_ctx) == 112, "ARM32 context layout changed");
 _Static_assert(offsetof(m0c_blake2s_ctx, h) == 0, "CTX_H");

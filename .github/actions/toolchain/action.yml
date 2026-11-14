@@ -1,0 +1,72 @@
+name: Pinned toolchain
+description: >-
+  Puts LLVM/LLD and QEMU at the versions in tools/versions.txt on PATH. LLVM is the official
+  Linux x86-64 release (sha256 pinned below); QEMU is built from its release source.
+runs:
+  using: composite
+  steps:
+    - id: v
+      shell: bash
+      run: |
+        echo "llvm=$(sed -n 's/^clang=//p' tools/versions.txt)" >> "$GITHUB_OUTPUT"
+        echo "qemu=$(sed -n 's/^qemu=//p' tools/versions.txt)" >> "$GITHUB_OUTPUT"
+    - shell: bash
+      run: |
+        sudo apt-get update -q
+        sudo apt-get install -y -q --no-install-recommends \
+          libglib2.0-dev libpixman-1-dev libfdt-dev ninja-build python3-venv flex bison
+    - id: llvm-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/llvm
+        key: llvm-${{ steps.v.outputs.llvm }}-${{ runner.os }}-${{ runner.arch }}
+    - if: steps.llvm-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        V: ${{ steps.v.outputs.llvm }}
+      run: |
+        case "$V" in
+          23.1.4) SHA=25d814fda50d5fb0084b42be09605d8b1595d49d5e2e03a3345d7e112ff6f9f3 ;;
+          *) echo "no sha256 pinned for LLVM $V" >&2; exit 1 ;;
+        esac
+        P="LLVM-$V-Linux-X64"
+        curl -sSfL -o "$RUNNER_TEMP/llvm.tar.xz" \
+          "https://github.com/llvm/llvm-project/releases/download/llvmorg-$V/$P.tar.xz"
+        echo "$SHA  $RUNNER_TEMP/llvm.tar.xz" | sha256sum -c -
+        mkdir -p ~/llvm
+        tar -xJf "$RUNNER_TEMP/llvm.tar.xz" -C ~/llvm --strip-components=1 \
+          $P/bin/clang $P/bin/clang-${V%%.*} $P/bin/lld $P/bin/ld.lld $P/bin/llvm-ar \
+          $P/bin/llvm-nm $P/bin/llvm-objcopy $P/bin/llvm-objdump $P/bin/llvm-readelf \
+          $P/bin/llvm-readobj $P/lib/clang/${V%%.*}/include
+        rm "$RUNNER_TEMP/llvm.tar.xz"
+    - id: qemu-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/qemu
+        key: qemu-${{ steps.v.outputs.qemu }}-${{ runner.os }}-${{ runner.arch }}
+    - if: steps.qemu-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        V: ${{ steps.v.outputs.qemu }}
+      run: |
+        case "$V" in
+          11.1.3) SHA=5a8289c7940dc77d3873c81a6c29ba3afe1446fc9d36e77fa1658cdbecb84b22 ;;
+          *) echo "no sha256 pinned for QEMU $V" >&2; exit 1 ;;
+        esac
+        cd "$RUNNER_TEMP"
+        curl -sSfL -o qemu.tar.xz "https://download.qemu.org/qemu-$V.tar.xz"
+        echo "$SHA  qemu.tar.xz" | sha256sum -c -
+        tar -xJf qemu.tar.xz
+        cd "qemu-$V"
+        ./configure --prefix="$HOME/qemu" --target-list=arm-softmmu \
+          --disable-docs --disable-tools --disable-werror
+        make -j"$(nproc)" install
+    - shell: bash
+      env:
+        LLVM: ${{ steps.v.outputs.llvm }}
+        QEMU: ${{ steps.v.outputs.qemu }}
+      run: |
+        echo "$HOME/llvm/bin" >> "$GITHUB_PATH"
+        echo "$HOME/qemu/bin" >> "$GITHUB_PATH"
+        "$HOME/llvm/bin/clang" --version | grep -F "clang version $LLVM"
+        "$HOME/qemu/bin/qemu-system-arm" --version | grep -F "version $QEMU"

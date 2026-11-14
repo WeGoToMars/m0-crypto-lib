@@ -7,7 +7,9 @@
 
 #include <stdint.h>
 
-#include "m0crypto/status.h"   /* M0C_OK */
+#ifndef M0C_OK
+#define M0C_OK 0   /* success; every m0-crypto header that returns a status defines it */
+#endif
 
 #ifdef __cplusplus
 extern "C" {

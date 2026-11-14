@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "m0crypto/blake2s.h"
+#include "blake2s_internal.h"   /* its _Static_asserts pin the context offsets */
 #include "blake2s_vectors.h"
 
 void semihost_write0(const char *s);

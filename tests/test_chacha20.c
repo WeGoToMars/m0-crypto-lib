@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "m0crypto/chacha20.h"
 #include "ref_chacha20.h"
+#include "chacha20_vectors.h"
 
 void semihost_write0(const char *s);
 int check_call(uint8_t *out, const uint8_t *in, size_t len, const uint8_t *key,
@@ -184,8 +185,34 @@ static void test_counter_edges(void) {
     }
 }
 
+/* pyca/cryptography outputs at chosen counters, and the M0C_ERR_COUNTER boundary. Rejected
+ * calls leave out unchanged; calls longer than the buffers run only if they are rejected. */
+static void test_pyca_counters(void) {
+    for (size_t i = 0; i < sizeof chacha_vecs / sizeof chacha_vecs[0]; i++) {
+        const struct chacha_vec *v = &chacha_vecs[i];
+        if (v->result == M0C_OK && v->len > CV_MAXOUT) continue;
+        for (size_t j = 0; j < MAXLEN && j < v->len; j++) inbuf[j] = CV_PATTERN(0, j);
+        fill(outbuf, sizeof outbuf);
+        static uint8_t before[sizeof outbuf];
+        memcpy(before, outbuf, sizeof outbuf);
+        uint32_t res[3];
+        int r = check_call(outbuf, inbuf, v->len, cv_key, cv_nonce, v->counter, res);
+        check(r == v->result, "pyca counter return", (uint32_t)r, v->counter);
+        if (v->result == M0C_OK) {
+            check(memeq(outbuf, cv_out + v->out, v->len), "pyca counter output", v->counter, v->len);
+            check(memeq(outbuf + v->len, before + v->len, sizeof outbuf - v->len),
+                  "pyca counter bytes after out unchanged", v->counter, v->len);
+        } else {
+            check(memeq(outbuf, before, sizeof outbuf), "pyca counter error leaves out unchanged",
+                  v->counter, v->len);
+        }
+        check(res[0] == 0, "callee-saved registers / sp (pyca)", res[0], v->counter);
+    }
+}
+
 int main(void) {
     test_vectors();
+    test_pyca_counters();
     test_differential();
     test_counter_edges();
     semihost_write0("peak stack bytes: ");

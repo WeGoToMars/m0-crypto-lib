@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  library:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/toolchain
+      - name: Build the release assets
+        run: tools/build_lib.sh
+      - name: Each .text equals its proofs artifact
+        run: |
+          for a in chacha20poly1305 blake2s x25519; do
+            python3 -I proofs/tools/extract_release.py "build/lib/$a/m0crypto_$a.o" \
+              "proofs/assets/$a/artifact/M0Crypto/Artifacts/Release.lean" --check
+          done
+      - name: QEMU tests
+        run: tools/test_qemu.sh
+      - name: Release archives
+        run: |
+          sudo apt-get install -y -q --no-install-recommends binutils-arm-none-eabi
+          python3 -I tools/release.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-archives
+          path: build/release/
+
+  proofs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/toolchain
+      - name: Lean (the version in lean-toolchain)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/v4.2.4/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      # Lake starts one Lean process per core regardless of memory: build under a budget first,
+      # so that check.sh's own lake build finds the workspaces up to date.
+      - name: Build the proofs
+        env:
+          M0C_BUILD_MEM_GB: "12"
+        run: |
+          for a in chacha20poly1305 blake2s x25519; do
+            (cd "proofs/assets/$a" && python3 ../../tools/membuild.py)
+          done
+      - name: Release gate
+        run: proofs/tools/check.sh

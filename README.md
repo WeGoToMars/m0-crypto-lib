@@ -64,21 +64,72 @@ The charts compare against portable C libraries and other optimized assembly imp
 
 [^pornin]: [x25519-cm0](https://github.com/pornin/x25519-cm0) inverts with Pornin's optimized binary GCD ([eprint 2020/972](https://eprint.iacr.org/2020/972)), 54,793 cycles according to its source. m0-crypto inverts with Fermat's little theorem, a chain of field squarings and multiplications. In the cycle model it costs 277,656 cycles, 8% of a call, and outside the inversion m0-crypto is about 5% faster than x25519-cm0. A GCD-style inversion such as safegcd would save about 5% of a call, but proving it needs the algorithm's iteration bound and a refinement of its batched matrix code, which by my estimation would roughly double the X25519 proofs. The Fermat chain reuses the already proved field multiply and square, so we accepted the slower inversion for a much smaller proof.
 
-## Build
+## Use
+
+Each primitive ships as its own release archive. Take the ones you need, and `SHA256SUMS`, from the [GitHub releases](https://github.com/WeGoToMars/m0-crypto-lib/releases):
+
+| Asset | Release archive | `.text` | Max stack |
+|---|---|---:|---:|
+| ChaCha20, ChaCha20-Poly1305 | `m0crypto-chacha20poly1305-*.tar.gz` | 3,030 B | 176 B (ChaCha20), 320 B (AEAD) |
+| BLAKE2s-256 | `m0crypto-blake2s-*.tar.gz` | 4,748 B | 160 B |
+| X25519 | `m0crypto-x25519-*.tar.gz` | 7,022 B | 516 B |
+
+0. Check the downloads:
+
+   ```sh
+   shasum -a 256 -c --ignore-missing SHA256SUMS    # Linux: sha256sum -c --ignore-missing SHA256SUMS
+   ```
+
+1. Unpack each archive into its own folder in your project:
+
+   ```sh
+   mkdir -p third_party/m0crypto-chacha20poly1305
+   tar xzf m0crypto-chacha20poly1305-*.tar.gz --strip-components=1 -C third_party/m0crypto-chacha20poly1305
+   ```
+
+   The folder holds `include/m0crypto/*.h`, `lib/libm0crypto_chacha20poly1305.a`, `src/`, `LICENSE` and `MANIFEST.txt`.
+
+2. Link it. With CMake:
+
+   ```cmake
+   foreach(asset chacha20poly1305 blake2s x25519)    # the assets you unpacked
+     add_library(m0crypto::${asset} STATIC IMPORTED)
+     set_target_properties(m0crypto::${asset} PROPERTIES
+       IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/third_party/m0crypto-${asset}/lib/libm0crypto_${asset}.a
+       INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/third_party/m0crypto-${asset}/include)
+   endforeach()
+   target_link_libraries(app PRIVATE m0crypto::chacha20poly1305)
+   ```
+
+   In another build system or IDE, add the `include/` folder to the include path and the `.a` file to the linker inputs. Build your firmware for Cortex-M0+ (`-mcpu=cortex-m0plus -mthumb`). The library needs no heap, static data, C library or relocation, so it runs from flash or SRAM.
+
+3. Call it:
+
+   ```c
+   #include "m0crypto/chacha20poly1305.h"
+
+   /* Encrypt in place: buf holds len bytes of plaintext, then the ciphertext. */
+   m0c_chacha20poly1305_encrypt(buf, tag, buf, len, aad, aad_len, key, nonce);
+
+   /* Decrypt in place: if the tag is wrong, buf is left unchanged. */
+   if (m0c_chacha20poly1305_decrypt(buf, tag, buf, len, aad, aad_len, key, nonce) != M0C_OK) {
+       /* reject the message */
+   }
+   ```
+
+4. Follow the rules in each header. Leave the stack space listed above, do not let buffers partly overlap, never reuse a nonce with the same key, wipe the BLAKE2s context after use, and reject low-order X25519 points if your protocol requires it.
+
+To assemble the code in your own build instead, use `src/m0crypto_ASSET_text.s` from the archive. Any ARM assembler (clang or GNU `as`) turns it into the same machine code.
+
+## Build from source
 
 ```sh
 tools/build_lib.sh            # all assets, or name them: tools/build_lib.sh x25519
 ```
 
-Requires clang/LLVM 23.1.4 on `PATH`. Each primitive is a separate asset with its own archive and proofs:
+The script requires clang/LLVM 23.1.4 on `PATH`, refuses any other version and writes `build/lib/ASSET/libm0crypto_ASSET.a` with its `MANIFEST.txt`. The proofs cover exactly this build: `text_sha256` in `MANIFEST.txt` must match the SHA-256 listed in [`proofs/README.md`](proofs/README.md#release-assets). The release archives contain the same build.
 
-| Asset | Archive | `.text` | Max stack |
-|---|---|---:|---:|
-| ChaCha20, ChaCha20-Poly1305 | `build/lib/chacha20poly1305/libm0crypto_chacha20poly1305.a` | 3,030 B | 176 B (ChaCha20), 320 B (AEAD) |
-| BLAKE2s-256 | `build/lib/blake2s/libm0crypto_blake2s.a` | 4,748 B | 160 B |
-| X25519 | `build/lib/x25519/libm0crypto_x25519.a` | 7,022 B | 516 B |
-
-Link the archives you use and add `include/` to the include path. There is no heap, static data, relocation or external dependency, so the code runs from flash or SRAM. `MANIFEST.txt` next to each archive records the hashes of the verified bytes.
+`tools/release.py` builds the release archives and checks them against the proofs. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) builds the assets, runs the QEMU tests, builds the archives and runs `proofs/tools/check.sh`.
 
 ## Test
 
