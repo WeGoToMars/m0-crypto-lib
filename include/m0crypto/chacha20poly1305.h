@@ -44,6 +44,11 @@ extern "C" {
  *   lengths and expected tag). Every byte of [SP-320, SP) is a function of only the
  *   entry registers, the nonce pointer, the bytes there at entry and, for decryption,
  *   whether the tag verified.
+ * - Interrupts (proved, modelled by the handler's effect): with the K bytes below the
+ *   stack window above address 0 and disjoint from the code and the call's buffers,
+ *   handlers that restore every register and flag and preserve the code, the buffers
+ *   and the window outside the K bytes below SP do not change the returned registers,
+ *   code or buffers. Clearing covers uninterrupted calls.
  * - Preconditions of the proofs (Aead.APre in proofs/). SP is the stack pointer at
  *   entry. "code" is the 3,030-byte .text of the linked m0crypto_chacha20poly1305 object.
  *   "A disjoint from B" means both address ranges end at or below 2^32 and do not

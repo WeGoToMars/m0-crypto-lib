@@ -46,6 +46,11 @@ _Static_assert(sizeof(m0c_blake2s_ctx) == 112, "ARM32 context layout changed");
  *   or the hash state. Each compression zeroes its 100 bytes of working state (message
  *   copy, v1..v7, h pointer, padding) before it returns. The context is caller memory,
  *   and the caller wipes it.
+ * - Interrupts (proved, modelled by the handler's effect): with the K bytes below the
+ *   stack window above address 0 and disjoint from the code and the call's buffers,
+ *   handlers that restore every register and flag and preserve the code, the buffers
+ *   and the window outside the K bytes below SP do not change the returned registers,
+ *   code or buffers. Clearing covers uninterrupted calls.
  * - Preconditions of the proofs (Blake2s.Init.Pre, Blake2s.Update.Pre and
  *   Blake2s.Final.Pre in proofs/). SP is the stack pointer at entry; W is the stack
  *   window [SP-4, SP) for init and [SP-160, SP) for update and final. "code" is the

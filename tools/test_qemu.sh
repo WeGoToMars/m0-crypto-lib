@@ -3,6 +3,8 @@
 # machine with semihosting. QEMU checks ARMv6-M behaviour, not timing.
 #   test_chacha20: m0c_chacha20_xor   test_aead: ChaCha20-Poly1305 and Poly1305
 #   test_blake2s: BLAKE2s-256 (init, update, final)   test_x25519: X25519 (RFC 7748)
+#   test_irq_ASSET: the asset's exported functions with SysTick exceptions during the calls
+#   (tests/irq.c); these images run with -icount so that SysTick counts instructions.
 #
 # Usage: tools/test_qemu.sh [ASSET...]     (default: all assets)
 #   ASSET is one of: chacha20poly1305 blake2s x25519
@@ -72,14 +74,46 @@ link test_x25519 "$O/startup.S.o" "$O/m0crypto_x25519.S.o" \
     "$O/check_call8_1k.S.o" "$O/test_x25519.c.o"
 fi
 
+# Interrupt test images. irq_text_lo and irq_text_hi bound the asset's .text (anchored at its
+# exported symbol ANCHOR, whose value has the Thumb bit set), and irq_end_F = F + size of F for
+# each exported function F.
+irqsyms() {   # irqsyms OBJ ANCHOR
+    aoff=$(llvm-nm "$1" | awk -v s="$2" '$3 == s { print $1 }')
+    text=$(llvm-size -A "$1" | awk '$1 == ".text" { print $2 }')
+    [ -n "$aoff" ] && [ -n "$text" ] || { echo "test_qemu: $2 or .text not found in $1" >&2; exit 1; }
+    printf ' --defsym=irq_text_lo=%s-1-0x%s --defsym=irq_text_hi=%s-1-0x%s+%s' \
+        "$2" "$aoff" "$2" "$aoff" "$text"
+    llvm-nm -S "$1" | while read -r _off size type name; do
+        [ "$type" = T ] && printf ' --defsym=irq_end_%s=%s+0x%s' "$name" "$name" "$size"
+    done
+}
+clang $CFLAGS -DSYSTICK_VECTOR -c "$T/startup.S" -o "$O/startup_irq.S.o"
+cc "$T/irq.S"
+cc "$T/irq.c"
+for a in $ASSETS; do
+    case $a in
+        chacha20poly1305) anchor=m0c_chacha20_xor; c8=check_call8.S.o ;;
+        blake2s) anchor=m0c_blake2s_init; c8=check_call8.S.o ;;
+        x25519) anchor=m0c_x25519; c8=check_call8_1k.S.o ;;
+    esac
+    cc "$T/test_irq_$a.c"
+    IMAGES="$IMAGES test_irq_$a"
+    # shellcheck disable=SC2046
+    link test_irq_$a $(irqsyms "$O/m0crypto_$a.S.o" $anchor) "$O/startup_irq.S.o" \
+        "$O/m0crypto_$a.S.o" "$O/$c8" "$O/irq.S.o" "$O/irq.c.o" "$O/test_irq_$a.c.o"
+done
+
 STATUS_ALL=0
 for img in $IMAGES; do
     LOG="$OUT/$img.log"
     STATUS=0
-    # perl alarm: kill QEMU if the image hangs.
-    perl -e 'alarm shift; exec @ARGV' "${TIMEOUT:-300}" \
+    case $img in test_irq_*) ICOUNT="-icount shift=6" ;; *) ICOUNT="" ;; esac
+    # perl watchdog: kill QEMU if the image hangs (QEMU with -icount ignores SIGALRM).
+    perl -e '$t = shift; $p = fork // die; exec @ARGV or exit 127 unless $p;
+             $SIG{ALRM} = sub { kill 9, $p; exit 124 }; alarm $t; waitpid $p, 0; exit $? >> 8' \
+        "${TIMEOUT:-300}" \
         "$QEMU" -machine microbit -nographic -monitor none -serial none \
-        -semihosting-config enable=on,target=native \
+        -semihosting-config enable=on,target=native $ICOUNT \
         -kernel "$OUT/$img.elf" > "$LOG" 2>&1 || STATUS=$?
     echo "== $img"
     cat "$LOG"

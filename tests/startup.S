@@ -5,6 +5,8 @@
  * With -DUART_OUT (bench images behind a bootloader), interrupts are masked, SP and
  * VTOR are set from this image's vector table, and output/exit go to uart_write0 and
  * uart_exit (bench/firmware/bench_uart.c).
+ * With -DSYSTICK_VECTOR (interrupt test images), the table continues to the SysTick
+ * exception, which goes to systick_handler (tests/irq.S).
  */
     .syntax unified
     .thumb
@@ -14,6 +16,12 @@ vector_table:
     .word reset_handler          /* .thumb_func symbols already carry the Thumb bit */
     .word fault_handler          /* NMI */
     .word fault_handler          /* HardFault */
+#ifdef SYSTICK_VECTOR
+    .rept 11                     /* exceptions 4-14 (SVCall, PendSV and reserved) */
+    .word fault_handler
+    .endr
+    .word systick_handler        /* SysTick */
+#endif
 
     .text
     .thumb_func

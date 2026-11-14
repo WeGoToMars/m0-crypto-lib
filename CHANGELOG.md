@@ -5,8 +5,9 @@
 - Same machine code as 0.3.0: every asset keeps its `.text` and SHA-256.
 - `m0crypto/status.h` is removed. `chacha20.h` and `x25519.h` define `M0C_OK` themselves, so no two archives contain the same file.
 - Proved: no key, message or other secret is left on the stack or in scratch registers when a function returns.
+- Proved: an interrupted call returns the same result, as long as the handlers restore all registers and leave the call's memory alone apart from their own stack frame. The headers give the exact conditions.
 - New release archive per asset, with the prebuilt library, its headers and an assembly file that any ARM assembler turns into the same verified machine code.
-- New tests: ChaCha20 at the 2^32 block-counter limit.
+- New tests: ChaCha20 at the 2^32 block-counter limit, and every function under interrupts on QEMU.
 - CI on GitHub Actions.
 
 ## 0.3.0

@@ -36,6 +36,11 @@ extern "C" {
  *   140 bytes [SP-176, SP-36) holding key-derived working state are zero on return.
  *   Otherwise they keep their entry values. The 36 bytes above them hold the
  *   caller's r4-r11 and LR.
+ * - Interrupts (proved, modelled by the handler's effect): with the K bytes below the
+ *   stack window above address 0 and disjoint from the code and the call's buffers,
+ *   handlers that restore every register and flag and preserve the code, the buffers
+ *   and the window outside the K bytes below SP do not change the returned registers,
+ *   code or buffers. Clearing covers uninterrupted calls.
  * - Preconditions of the proofs (ChaCha20Xor.Pre in proofs/). SP is the stack pointer at
  *   entry. "code" is the 3,030-byte .text of the linked m0crypto_chacha20poly1305 object.
  *   "A disjoint from B" means both address ranges end at or below 2^32 and do not

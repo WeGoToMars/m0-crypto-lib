@@ -141,14 +141,16 @@ Runs each release object on QEMU's Cortex-M0 (QEMU 11.1.3) against RFC, Wychepro
 
 ## Proofs and Scope
 
-Lean 4 proofs in [`proofs/`](proofs/) cover the exact `.text` bytes of each release object, in a model of the ARMv6-M instructions it uses, for calls that meet the preconditions in each header. For every exported function they prove:
+Lean 4 proofs in [`proofs/`](proofs/) cover the exact machine code of each release build. For every exported function they prove that it:
 
-- **Correctness:** the output matches RFC 8439, RFC 7693 or RFC 7748 for any length, alignment and allowed overlap, and every call returns.
-- **Memory safety:** reads and writes stay inside the caller's buffers, the code and the stack bound above. SP and r4-r11 are restored.
-- **Constant-time traces:** the executed instructions and accessed addresses depend only on public inputs (pointers, lengths, the ChaCha20 counter, whether a tag verified, the BLAKE2s buffered byte count).
-- **Clearing:** the stack bytes and registers that each header lists as proved are zero on return.
+- **Is correct:** returns the result specified by RFC 8439, RFC 7693 or RFC 7748, for any length, alignment and allowed buffer overlap.
+- **Is memory-safe:** reads only its buffers, its code and its stack, writes only its buffers and its stack, stays within the stack size above, and restores SP and r4-r11.
+- **Runs in constant time:** its instructions and memory addresses depend only on public inputs such as pointers and lengths.
+- **Leaves no secrets:** no key, message or other secret stays on the stack or in scratch registers after it returns.
 
-The proofs assume sequential execution in ordinary memory, with no interrupts, concurrent memory writes (such as DMA) or faults during a call. Execution time is assumed to depend only on the instruction and address trace, which the BLAKE2s and X25519 board harnesses in [`bench/board/`](bench/board/README.md) test on varied inputs. Theorem names and exact statements: [`proofs/README.md`](proofs/README.md), [`proofs/docs/REVIEW.md`](proofs/docs/REVIEW.md).
+Each header gives the exact guarantees and the conditions a call must meet, interrupts included.
+
+The proofs assume that the buffers are ordinary RAM that nothing else (such as DMA) writes during the call, and that execution time depends only on the instructions and addresses, which the board tests in [`bench/board/`](bench/board/README.md) check for BLAKE2s and X25519. Theorem names and exact statements are in [`proofs/README.md`](proofs/README.md).
 
 ```sh
 git clone --recurse-submodules https://github.com/WeGoToMars/m0-crypto-lib

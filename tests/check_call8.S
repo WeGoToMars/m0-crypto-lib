@@ -10,6 +10,7 @@
  * cc8_volatile[5] receives r1, r2, r3, r12 and lr as fn left them on return, so the
  * caller can check documented register clearing. They are saved into this
  * function's own frame (above the call-site SP), so the snapshot is not disturbed.
+ * cc8_sp holds the call-site SP (the interrupt tests, tests/irq.c, read it).
  * Test image only.
  */
 #ifndef CC8_BYTES
@@ -22,6 +23,7 @@
     .global stack_snapshot
 stack_snapshot:
     .space CC8_BYTES
+    .global cc8_sp
 cc8_sp:
     .space 4
 cc8_fn:
