@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+- Same machine code as 0.3.1.
+- The proofs build without warnings, and a new warning fails the build.
+- CI fixes: the toolchain installs every tool the scripts use, and the proof checks no longer depend on which linker build wrote an ELF file.
+
 ## 0.3.1
 
 - Same machine code as 0.3.0: every asset keeps its `.text` and SHA-256.
