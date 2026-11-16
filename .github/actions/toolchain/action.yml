@@ -11,6 +11,7 @@ runs:
       run: |
         echo "llvm=$(sed -n 's/^clang=//p' tools/versions.txt)" >> "$GITHUB_OUTPUT"
         echo "qemu=$(sed -n 's/^qemu=//p' tools/versions.txt)" >> "$GITHUB_OUTPUT"
+        echo "os=$(. /etc/os-release && echo "$ID-$VERSION_ID")" >> "$GITHUB_OUTPUT"
     - shell: bash
       run: |
         sudo apt-get update -q
@@ -21,7 +22,7 @@ runs:
       uses: actions/cache@v6
       with:
         path: ~/llvm
-        key: llvm-${{ steps.v.outputs.llvm }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/actions/toolchain/action.yml') }}
+        key: llvm-${{ steps.v.outputs.llvm }}-${{ steps.v.outputs.os }}-${{ runner.arch }}-${{ hashFiles('.github/actions/toolchain/action.yml') }}
     - if: steps.llvm-cache.outputs.cache-hit != 'true'
       shell: bash
       env:
@@ -45,7 +46,7 @@ runs:
       uses: actions/cache@v6
       with:
         path: ~/qemu
-        key: qemu-${{ steps.v.outputs.qemu }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/actions/toolchain/action.yml') }}
+        key: qemu-${{ steps.v.outputs.qemu }}-${{ steps.v.outputs.os }}-${{ runner.arch }}-${{ hashFiles('.github/actions/toolchain/action.yml') }}
     - if: steps.qemu-cache.outputs.cache-hit != 'true'
       shell: bash
       env:

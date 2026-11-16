@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   library:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -39,7 +39,7 @@ jobs:
           path: build/release/
 
   proofs:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v7
@@ -78,7 +78,7 @@ jobs:
   # the constant-time certificate (X25519), by the proofs (BLAKE2s).
   mutation:
     name: mutation (${{ matrix.name }})
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 330
     strategy:
       fail-fast: false
