@@ -79,12 +79,12 @@ fi
 # each exported function F.
 irqsyms() {   # irqsyms OBJ ANCHOR
     aoff=$(llvm-nm "$1" | awk -v s="$2" '$3 == s { print $1 }')
-    text=$(llvm-size -A "$1" | awk '$1 == ".text" { print $2 }')
+    text=$(llvm-objdump -h "$1" | awk '$2 == ".text" { print "0x" $3 }')
     [ -n "$aoff" ] && [ -n "$text" ] || { echo "test_qemu: $2 or .text not found in $1" >&2; exit 1; }
     printf ' --defsym=irq_text_lo=%s-1-0x%s --defsym=irq_text_hi=%s-1-0x%s+%s' \
         "$2" "$aoff" "$2" "$aoff" "$text"
     llvm-nm -S "$1" | while read -r _off size type name; do
-        [ "$type" = T ] && printf ' --defsym=irq_end_%s=%s+0x%s' "$name" "$name" "$size"
+        if [ "$type" = T ]; then printf ' --defsym=irq_end_%s=%s+0x%s' "$name" "$name" "$size"; fi
     done
 }
 clang $CFLAGS -DSYSTICK_VECTOR -c "$T/startup.S" -o "$O/startup_irq.S.o"
@@ -98,8 +98,9 @@ for a in $ASSETS; do
     esac
     cc "$T/test_irq_$a.c"
     IMAGES="$IMAGES test_irq_$a"
-    # shellcheck disable=SC2046
-    link test_irq_$a $(irqsyms "$O/m0crypto_$a.S.o" $anchor) "$O/startup_irq.S.o" \
+    syms=$(irqsyms "$O/m0crypto_$a.S.o" $anchor)   # a failure here stops the script (set -e)
+    # shellcheck disable=SC2086
+    link test_irq_$a $syms "$O/startup_irq.S.o" \
         "$O/m0crypto_$a.S.o" "$O/$c8" "$O/irq.S.o" "$O/irq.c.o" "$O/test_irq_$a.c.o"
 done
 
