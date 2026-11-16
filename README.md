@@ -129,7 +129,7 @@ tools/build_lib.sh            # all assets, or name them: tools/build_lib.sh x25
 
 The script requires clang/LLVM 23.1.4 on `PATH`, refuses any other version and writes `build/lib/ASSET/libm0crypto_ASSET.a` with its `MANIFEST.txt`. The proofs cover exactly this build: `text_sha256` in `MANIFEST.txt` must match the SHA-256 listed in [`proofs/README.md`](proofs/README.md#release-assets). The release archives contain the same build.
 
-`tools/release.py` builds the release archives and checks them against the proofs. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) builds the assets, runs the QEMU tests, builds the archives and runs `proofs/tools/check.sh`.
+`tools/release.py` builds the release archives and checks them against the proofs. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) builds the assets, runs the QEMU tests, builds the archives, runs `proofs/tools/check.sh` and `proofs/tools/comparator.sh`, and runs the three mutation scripts of `proofs/tools`.
 
 ## Test
 
