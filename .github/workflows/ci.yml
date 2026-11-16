@@ -1,8 +1,11 @@
 name: CI
 
 on:
+  # CI reads none of these paths, so changes confined to them skip it.
   push:
+    paths-ignore: ['bench/**', 'README.md', 'THIRD_PARTY.md']
   pull_request:
+    paths-ignore: ['bench/**', 'README.md', 'THIRD_PARTY.md']
   workflow_dispatch:
 
 # A newer push to the same branch supersedes a running check.
