@@ -3,6 +3,12 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch supersedes a running check.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -11,7 +17,7 @@ jobs:
   library:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: ./.github/actions/toolchain
@@ -26,10 +32,8 @@ jobs:
       - name: QEMU tests
         run: tools/test_qemu.sh
       - name: Release archives
-        run: |
-          sudo apt-get install -y -q --no-install-recommends binutils-arm-none-eabi
-          python3 -I tools/release.py
-      - uses: actions/upload-artifact@v4
+        run: python3 -I tools/release.py
+      - uses: actions/upload-artifact@v7
         with:
           name: release-archives
           path: build/release/
@@ -38,7 +42,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: ./.github/actions/toolchain

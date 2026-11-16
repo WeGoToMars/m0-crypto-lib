@@ -1,7 +1,8 @@
 name: Pinned toolchain
 description: >-
-  Puts LLVM/LLD and QEMU at the versions in tools/versions.txt on PATH. LLVM is the official
-  Linux x86-64 release (sha256 pinned below); QEMU is built from its release source.
+  Puts every external tool the build, test and release scripts call on PATH: clang, LLD and
+  the LLVM binutils at the version in tools/versions.txt (official Linux x86-64 release, sha256
+  pinned below), QEMU at its version (built from the release source) and GNU as (apt).
 runs:
   using: composite
   steps:
@@ -14,12 +15,13 @@ runs:
       run: |
         sudo apt-get update -q
         sudo apt-get install -y -q --no-install-recommends \
-          libglib2.0-dev libpixman-1-dev libfdt-dev ninja-build python3-venv flex bison
+          libglib2.0-dev libpixman-1-dev libfdt-dev ninja-build python3-venv flex bison \
+          binutils-arm-none-eabi
     - id: llvm-cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/llvm
-        key: llvm-${{ steps.v.outputs.llvm }}-${{ runner.os }}-${{ runner.arch }}
+        key: llvm-${{ steps.v.outputs.llvm }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/actions/toolchain/action.yml') }}
     - if: steps.llvm-cache.outputs.cache-hit != 'true'
       shell: bash
       env:
@@ -40,10 +42,10 @@ runs:
           $P/bin/llvm-readobj $P/lib/clang/${V%%.*}/include
         rm "$RUNNER_TEMP/llvm.tar.xz"
     - id: qemu-cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/qemu
-        key: qemu-${{ steps.v.outputs.qemu }}-${{ runner.os }}-${{ runner.arch }}
+        key: qemu-${{ steps.v.outputs.qemu }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/actions/toolchain/action.yml') }}
     - if: steps.qemu-cache.outputs.cache-hit != 'true'
       shell: bash
       env:
@@ -70,3 +72,7 @@ runs:
         echo "$HOME/qemu/bin" >> "$GITHUB_PATH"
         "$HOME/llvm/bin/clang" --version | grep -F "clang version $LLVM"
         "$HOME/qemu/bin/qemu-system-arm" --version | grep -F "version $QEMU"
+        for t in clang ld.lld llvm-ar llvm-nm llvm-objcopy llvm-objdump llvm-readelf \
+            qemu-system-arm arm-none-eabi-as; do
+          PATH="$HOME/llvm/bin:$HOME/qemu/bin:$PATH" command -v "$t"
+        done
