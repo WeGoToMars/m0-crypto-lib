@@ -6,8 +6,9 @@
 DATA_DIR holds compare-PRIMITIVE.log (bench/board/run_board.sh on the
 build_compare.sh images) and count-PRIMITIVE.csv (bench/count.py's cycles.csv for the
 same objects; for X25519 run with --random 2). Fails (exit 1) if a log lacks
-`RESULT: PASS` and `EXIT 0x00000000`, if a case's five runs differ, or if a board case
-has no model row. Prints, per case, the board count, the zero-wait model, the store
+`RESULT: PASS` and `EXIT 0x00000000`, if a case's five runs differ, if a board case
+has no model row, or if a board count is below the zero-wait model (the board image
+counts at most one SysTick wrap: a second would make a count 2^24 short). Prints, per case, the board count, the zero-wait model, the store
 model and their ratios. With --charts, writes bench/charts/PRIMITIVE/cycles_summary.svg.
 """
 import csv
@@ -63,6 +64,8 @@ for primitive in ("chacha20poly1305", "blake2s", "x25519"):
             fail(f"{primitive} {k}: no model row")
             continue
         zw, st, r = model[k]
+        if b < zw:
+            fail(f"{primitive} {k}: board {b} is below the zero-wait model {zw}")
         print(f"| {k[0]} | {k[1]} | {k[2]} | {k[3]} | {b:,} | {zw:,} | {b / zw:.3f} | {st:,} | {b / st:.3f} |")
         rows.append({**r, "board_cycles": b})
     if primitive == "x25519":

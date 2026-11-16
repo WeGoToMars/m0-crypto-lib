@@ -36,11 +36,11 @@ from reference import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-CHACHA_IMPLEMENTATIONS = ("m0c", "wolf", "mono", "ossl")
+CHACHA_IMPLEMENTATIONS = ("m0c", "wolf", "mono", "ossl", "mbed")
 CHACHA_OPERATIONS = ("chacha", "encrypt", "decrypt", "reject")
 BLAKE2S_IMPLEMENTATIONS = ("m0c", "wolf", "ref", "ossl")
 BLAKE2S_OPERATIONS = ("hash", "stream")
-X25519_IMPLEMENTATIONS = ("m0c", "wolf", "pornin", "mono", "ossl")
+X25519_IMPLEMENTATIONS = ("m0c", "wolf", "pornin", "mono", "ossl", "mbed")
 X25519_INSTRUCTION_LIMIT = 200_000_000
 
 
@@ -52,6 +52,8 @@ class Workload:
     plaintext: bytes
     ciphertext: bytes
     tag: bytes
+    # PSA's ChaCha20 stream cipher (Mbed TLS) starts at block counter 0.
+    stream_counter0: bytes
 
     @classmethod
     def create(cls, length: int, aad_length: int) -> "Workload":
@@ -61,7 +63,8 @@ class Workload:
         plaintext = bytes(index % 251 for index in range(length))
         ciphertext = chacha(key, nonce, plaintext)
         tag = tag_for(key, nonce, aad, ciphertext)
-        return cls(key, nonce, aad, plaintext, ciphertext, tag)
+        stream_counter0 = chacha(key, nonce, plaintext, counter=0)
+        return cls(key, nonce, aad, plaintext, ciphertext, tag, stream_counter0)
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -88,12 +91,12 @@ def parse_arguments() -> argparse.Namespace:
     return arguments
 
 
-def verified_elf_hash(output: Path) -> str:
+def verified_manifest(output: Path) -> dict:
     manifest = json.loads((output / "manifest.json").read_text())
     digest = hashlib.sha256((output / "bench.elf").read_bytes()).hexdigest()
     if digest != manifest["elf_sha256"]:
         raise RuntimeError("ELF differs from build manifest")
-    return digest
+    return manifest
 
 
 def check_result(
@@ -106,8 +109,13 @@ def check_result(
     if operation == "reject":
         if result.status == 0:
             raise RuntimeError("accepted modified tag")
-        # wolfSSL has a different rejected-decrypt output convention.
-        if implementation != "wolf":
+        # wolfSSL has a different rejected-decrypt output convention. Mbed TLS's
+        # multipart decryption releases plaintext before the tag check; its wrapper
+        # clears the output on failure.
+        if implementation == "mbed":
+            if result.output != bytes(len(workload.ciphertext)):
+                raise RuntimeError("did not clear the output on authentication failure")
+        elif implementation != "wolf":
             expected = OUTPUT_SENTINEL * len(workload.ciphertext)
             if alignment == "ip":
                 expected = workload.ciphertext
@@ -120,6 +128,8 @@ def check_result(
     expected_output = (
         workload.plaintext if operation == "decrypt" else workload.ciphertext
     )
+    if implementation == "mbed" and operation == "chacha":
+        expected_output = workload.stream_counter0
     if result.output != expected_output:
         raise RuntimeError("output differs from the reference")
     if operation == "encrypt" and result.tag != workload.tag:
@@ -177,6 +187,7 @@ def count_columns(counts: Counts) -> dict:
         "sram_store_model_cycles": counts.sram_store_model_cycles,
         "peak_stack_bytes": counts.peak_stack,
         "caller_state_bytes": counts.caller_state,
+        "peak_heap_bytes": counts.peak_heap,
     }
 
 
@@ -187,6 +198,9 @@ def chacha_rows(runner: Runner, arguments: argparse.Namespace) -> list[dict]:
         workload = Workload.create(length, arguments.aad_length)
         for alignment in arguments.alignments:
             for implementation in CHACHA_IMPLEMENTATIONS:
+                # MBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS leaves overlapping buffers unsupported.
+                if implementation == "mbed" and alignment == "ip":
+                    continue
                 for operation in CHACHA_OPERATIONS:
                     rows.append(
                         run_case(runner, workload, implementation, operation, alignment)
@@ -286,7 +300,7 @@ ROWS = {"chacha20poly1305": chacha_rows, "blake2s": blake2s_rows, "x25519": x255
 
 
 def write_results(
-    rows: list[dict], arguments: argparse.Namespace, elf_hash: str, output: Path
+    rows: list[dict], arguments: argparse.Namespace, manifest: dict, output: Path
 ) -> list[Path]:
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=rows[0].keys())
@@ -303,7 +317,7 @@ def write_results(
     }
     metadata = {
         "primitive": primitive,
-        "elf_sha256": elf_hash,
+        "elf_sha256": manifest["elf_sha256"],
         "unicorn": unicorn.__version__,
         "capstone_runtime": capstone.__version__,
         "lengths": arguments.lengths,
@@ -322,9 +336,12 @@ def write_results(
 def main() -> None:
     arguments = parse_arguments()
     output = ROOT / "build/bench" / arguments.primitive
-    elf_hash = verified_elf_hash(output)
+    manifest = verified_manifest(output)
     runner = Runner(output / "bench.elf")
     rows = ROWS[arguments.primitive](runner, arguments)
+    # Static RAM is a property of the linked image, from the build manifest.
+    for row in rows:
+        row["static_ram_bytes"] = manifest["static_ram_bytes"].get(row["impl"], 0)
 
     bound = M0C_STACK_BOUNDS[arguments.primitive]
     m0c_stack = max(row["peak_stack_bytes"] for row in rows if row["impl"] == "m0c")
@@ -332,8 +349,8 @@ def main() -> None:
         raise RuntimeError(f"m0c used {m0c_stack} B of stack; proved bound is {bound} B")
 
     # Publish results only after every correctness check succeeds.
-    chart_paths = write_results(rows, arguments, elf_hash, output)
-    print(f"PASS: {len(rows)} oracle-checked calls; ELF {elf_hash}")
+    chart_paths = write_results(rows, arguments, manifest, output)
+    print(f"PASS: {len(rows)} oracle-checked calls; ELF {manifest['elf_sha256']}")
     print(output / "cycles.csv")
     print(*chart_paths, sep="\n")
 

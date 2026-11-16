@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tarfile
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,19 +25,62 @@ TOOLCHAIN_VERSION = "23.1.4"
 WOLFSSL_TAG = "v5.9.4-stable"
 WOLFSSL_COMMIT = "3c5eead44904df64e6a5a1f4ebdce377d35a849a"
 WOLF_SRC = WOLFSSL / "wolfcrypt/src"
+# Mbed TLS 4.3.0 release archive: its tf-psa-crypto/ directory holds the cryptography,
+# including the generated PSA driver wrappers that the git tree lacks.
+MBEDTLS_VERSION = "4.3.0"
+MBEDTLS_URL = (
+    "https://github.com/Mbed-TLS/mbedtls/releases/download/"
+    f"mbedtls-{MBEDTLS_VERSION}/mbedtls-{MBEDTLS_VERSION}.tar.bz2"
+)
+MBEDTLS_SHA256 = "1c87cba094cb40f097ebe0eba440a74939b71dab4e1d0d566bc90749ff381d18"
+MBEDTLS_ARCHIVE = THIRD_PARTY / f"mbedtls-{MBEDTLS_VERSION}.tar.bz2"
+TF_PSA = THIRD_PARTY / f"mbedtls-{MBEDTLS_VERSION}/tf-psa-crypto"
+# Library source directories, as upstream's core/crypto-library.make lists them.
+TF_PSA_SOURCE_DIRECTORIES = (
+    "core", "drivers/builtin/src", "dispatch", "extras", "platform", "utilities",
+)
+
+
+def mbedtls_sources() -> list[Path]:
+    return sorted(
+        path for directory in TF_PSA_SOURCE_DIRECTORIES
+        for path in (TF_PSA / directory).glob("*.c")
+    )
+
+
+def mbedtls_flags(primitive: str) -> list[str]:
+    """Include directories of a TF-PSA-Crypto build and the image's configuration."""
+    flags = [f'-DTF_PSA_CRYPTO_CONFIG_FILE="crypto_config_{primitive}.h"',
+             "-I", str(BENCH / "mbedtls")]
+    for directory in (
+        "include", "drivers/builtin/include", "drivers/everest/include", "drivers/pqcp/include",
+        "drivers/p256-m", *TF_PSA_SOURCE_DIRECTORIES,
+    ):
+        flags.extend(["-I", str(TF_PSA / directory)])
+    return flags
+
 # Shared freestanding runtime: linked into every image, counted in cycles, not in code size.
 RUNTIME = [BENCH / "runtime.c", BENCH / "lmul.S"]
 
 # Per primitive: wrapper names run_IMPL_OP, the harness files and, per comparator, its
-# sources (code size is summed per comparator from the link map), wolfSSL feature macros,
+# sources (code size is summed per comparator from the link map; Mbed TLS's list is
+# taken after the fetch), the harness files compiled with the Mbed TLS configuration,
+# wolfSSL feature macros,
 # the header whose macro dump records wolfSSL's effective backend, and the backend
 # macros worth printing.
 PRIMITIVES = {
     "chacha20poly1305": {
-        "implementations": ("m0c", "wolf", "mono", "ossl"),
+        "implementations": ("m0c", "wolf", "mono", "ossl", "mbed"),
         "operations": ("chacha", "encrypt", "decrypt"),
-        "harness": [BENCH / "harness/chacha20poly1305.c"],
+        "harness": [
+            BENCH / "harness/chacha20poly1305.c",
+            BENCH / "harness/chacha20poly1305_mbed.c",
+            BENCH / "harness/mbedtls_platform.c",
+        ],
+        "mbed_harness": ("chacha20poly1305_mbed.c", "mbedtls_platform.c"),
+        "setup": ("mbed",),
         "sources": {
+            "mbed": mbedtls_sources,
             "mono": [THIRD_PARTY / "monocypher/src/monocypher.c"],
             "ossl": [
                 THIRD_PARTY / "openssl/crypto/chacha/chacha_enc.c",
@@ -85,10 +129,17 @@ PRIMITIVES = {
         "backend_macros": {"HAVE_BLAKE2S", "WOLFSSL_ARMASM", "WOLFSSL_NO_ASM"},
     },
     "x25519": {
-        "implementations": ("m0c", "pornin", "wolf", "mono", "ossl"),
+        "implementations": ("m0c", "pornin", "wolf", "mono", "ossl", "mbed"),
         "operations": ("shared", "public"),
-        "harness": [BENCH / "harness/x25519.c"],
+        "harness": [
+            BENCH / "harness/x25519.c",
+            BENCH / "harness/x25519_mbed.c",
+            BENCH / "harness/mbedtls_platform.c",
+        ],
+        "mbed_harness": ("x25519_mbed.c", "mbedtls_platform.c"),
+        "setup": ("mbed",),
         "sources": {
+            "mbed": mbedtls_sources,
             "pornin": [THIRD_PARTY / "x25519-cm0/src/x25519-cm0.S"],
             "wolf": [WOLF_SRC / "curve25519.c", WOLF_SRC / "fe_operations.c"],
             "mono": [THIRD_PARTY / "monocypher/src/monocypher.c"],
@@ -143,6 +194,18 @@ def fetch_locked_sources(sources: list[dict]) -> None:
                 destination.write_bytes(response.read())
         if sha256(destination) != source["sha256"]:
             raise SystemExit(f"source checksum mismatch: {destination}")
+
+
+def fetch_mbedtls() -> None:
+    if not MBEDTLS_ARCHIVE.exists():
+        THIRD_PARTY.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(MBEDTLS_URL, timeout=120) as response:
+            MBEDTLS_ARCHIVE.write_bytes(response.read())
+    if sha256(MBEDTLS_ARCHIVE) != MBEDTLS_SHA256:
+        raise SystemExit(f"source checksum mismatch: {MBEDTLS_ARCHIVE}")
+    if not TF_PSA.exists():
+        with tarfile.open(MBEDTLS_ARCHIVE) as archive:
+            archive.extractall(THIRD_PARTY, filter="data")
 
 
 def fetch_wolfssl() -> None:
@@ -202,7 +265,10 @@ def compile_sources(
     owners = {m0c_object: "m0c"}
     sources = [(source, None) for source in config["harness"] + RUNTIME]
     for implementation, paths in config["sources"].items():
+        paths = paths() if callable(paths) else paths
         sources.extend((path, implementation) for path in paths)
+    for stale in output.glob("[0-9]*-*.o"):  # build_compare.sh links every numbered object
+        stale.unlink()
     objects = [m0c_object]
     for index, (source, owner) in enumerate(sources):
         destination = output / f"{index}-{source.stem}.o"
@@ -210,6 +276,8 @@ def compile_sources(
         if source == BENCH / "runtime.c":
             extra_flags.append("-fno-builtin")
         extra_flags += config.get("file_flags", {}).get(source.name, [])
+        if owner == "mbed" or source.name in config.get("mbed_harness", ()):
+            extra_flags += mbedtls_flags(primitive)
         run(CLANG, *flags, *extra_flags, "-c", source, "-o", destination)
         objects.append(destination)
         if owner:
@@ -224,6 +292,8 @@ def link_image(objects: list[Path], config: dict, output: Path) -> None:
         for implementation in config["implementations"]
         for operation in config["operations"]
     ]
+    # One-time initialisation that armv6m.py and the board image run before timing.
+    roots += [f"--undefined=setup_{implementation}" for implementation in config.get("setup", ())]
     run(
         LINKER,
         "-T",
@@ -243,14 +313,16 @@ def link_image(objects: list[Path], config: dict, output: Path) -> None:
 MAP_INPUT = re.compile(r"^\s*[0-9a-f]+\s+[0-9a-f]+\s+([0-9a-f]+)\s+\d+\s+(\S+\.o):\((\S+)\)")
 
 
-def code_bytes(map_path: Path, owners: dict[Path, str]) -> dict[str, int]:
-    """Bytes of linked .text and .rodata input sections per comparator, after
+def section_bytes(
+    map_path: Path, owners: dict[Path, str], prefixes: tuple[str, ...]
+) -> dict[str, int]:
+    """Bytes of linked input sections with these name prefixes per comparator, after
     --gc-sections. Harness and shared runtime sections are not counted."""
     sizes = {implementation: 0 for implementation in owners.values()}
     by_name = {str(path): owner for path, owner in owners.items()}
     for line in map_path.read_text().splitlines():
         match = MAP_INPUT.match(line)
-        if match and match[2] in by_name and match[3].startswith((".text", ".rodata")):
+        if match and match[2] in by_name and match[3].startswith(prefixes):
             sizes[by_name[match[2]]] += int(match[1], 16)
     return sizes
 
@@ -293,6 +365,7 @@ def write_manifest(
     primitive: str,
     output: Path,
     code_sizes: dict[str, int],
+    ram_sizes: dict[str, int],
     clang_version: str,
     linker_version: str,
     optimization: str,
@@ -309,10 +382,12 @@ def write_manifest(
         "opt": optimization,
         "target": "thumbv6m-none-eabi cortex-m0plus",
         "wolfssl_commit": WOLFSSL_COMMIT,
+        "mbedtls": {"version": MBEDTLS_VERSION, "url": MBEDTLS_URL, "sha256": MBEDTLS_SHA256},
         "sources": sources,
         "inputs": local_input_hashes(),
         "m0c_text_sha256": sha256(ROOT / f"build/lib/{primitive}/text.bin"),
         "code_bytes": code_sizes,
+        "static_ram_bytes": ram_sizes,
         "elf_sha256": sha256(output / "bench.elf"),
     }
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
@@ -333,15 +408,18 @@ def main() -> None:
     sources = json.loads((BENCH / "sources.lock.json").read_text())
     fetch_locked_sources(sources)
     fetch_wolfssl()
+    fetch_mbedtls()
     run(ROOT / "tools/build_lib.sh", primitive)
     flags = compiler_flags(optimization, config)
     objects, owners = compile_sources(flags, primitive, config, output)
     link_image(objects, config, output)
-    code_sizes = code_bytes(output / "bench.map", owners)
+    code_sizes = section_bytes(output / "bench.map", owners, (".text", ".rodata"))
+    ram_sizes = section_bytes(output / "bench.map", owners, (".data", ".bss"))
     print("code bytes (" + optimization + "): " + ", ".join(f"{k} {v}" for k, v in code_sizes.items()))
+    print("static RAM bytes: " + ", ".join(f"{k} {v}" for k, v in ram_sizes.items() if v))
     backend = record_wolfssl_backend(flags, config, output)
     write_manifest(
-        primitive, output, code_sizes, clang_version, linker_version,
+        primitive, output, code_sizes, ram_sizes, clang_version, linker_version,
         optimization, flags, sources, backend,
     )
     print(output / "bench.elf")

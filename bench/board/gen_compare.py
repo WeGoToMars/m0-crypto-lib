@@ -7,7 +7,9 @@ The workloads are those of bench/count.py (default lengths, aligned buffers; for
 the RFC 7748 section 6.1 keys plus two seeded pseudo-random inputs, as with
 `count.py x25519 --random 2`) and the expected results come from bench/reference.py,
 which is checked against the RFC test vectors first. Each case names one
-run_IMPL_OP wrapper of bench/harness/, the wrapper the emulator counts.
+run_IMPL_OP wrapper of bench/harness/, the wrapper the emulator counts. The header's
+cmp_setup() calls the one-time setup_IMPL functions that bench/armv6m.py also runs
+untimed before each call.
 """
 import hashlib
 import os
@@ -27,8 +29,9 @@ def arr(b: bytes) -> str:
 
 
 class Table:
-    def __init__(self, primitive):
+    def __init__(self, primitive, setups=()):
         self.primitive = primitive
+        self.setups = setups
         self.arrays, self.cases, self.wrappers = [], [], set()
 
     def array(self, name, data: bytes) -> str:
@@ -50,6 +53,9 @@ class Table:
             f'#define CMP_PRIMITIVE "{self.primitive}"',
         ]
         lines += [f"void {w}(Job *);" for w in sorted(self.wrappers)]
+        lines += [f"void setup_{impl}(void);" for impl in self.setups]
+        lines += ["static void cmp_setup(void) {"]
+        lines += [f"    setup_{impl}();" for impl in self.setups] + ["}"]
         lines += self.arrays
         lines += [f"#define CMP_NCASES {len(self.cases)}",
                   "static const struct cmp_case cmp_cases[CMP_NCASES] = {"]
@@ -64,19 +70,27 @@ def chacha20poly1305(t: Table) -> None:
     ct = r.chacha(key, nonce, pt)
     k, n, a = t.array("k", key), t.array("nonce", nonce), t.array("aad", aad)
     p, c = t.array("pt", pt), t.array("ct", ct)
+    # PSA's ChaCha20 (Mbed TLS) starts at block counter 0; on a rejected tag the Mbed TLS
+    # wrapper clears the output (as in count.py).
+    c0 = t.array("ct_counter0", r.chacha(key, nonce, pt, counter=0))
+    zero = t.array("zero", bytes(max(LENGTHS)))
     for length in LENGTHS:
         tag = r.tag_for(key, nonce, aad, ct[:length])
         good = t.array(f"tag{length}", tag)
         bad = t.array(f"badtag{length}", bytes([tag[0] ^ 1]) + tag[1:])
-        for impl in ("m0c", "wolf", "mono", "ossl"):
+        for impl in ("m0c", "wolf", "mono", "ossl", "mbed"):
             w = lambda op: f"run_{impl}_{op}"
             t.case(impl, "chacha", "", w("chacha"), length, k, n, (a, 16), (p, length), 0,
-                   (c, length), 0)
+                   (c0 if impl == "mbed" else c, length), 0)
             t.case(impl, "encrypt", "", w("encrypt"), length, k, n, (a, 16), (p, length), 0,
                    (c, length), good)
             t.case(impl, "decrypt", "", w("decrypt"), length, k, n, (a, 16), (c, length), good,
                    (p, length), 0)
             # wolfSSL has a different rejected-decrypt output convention (as in count.py).
+            if impl == "mbed":
+                t.case(impl, "reject", "", w("decrypt"), length, k, n, (a, 16), (c, length), bad,
+                       (zero, length), 0, reject=True)
+                continue
             t.case(impl, "reject", "", w("decrypt"), length, k, n, (a, 16), (c, length), bad,
                    (0, length if impl != "wolf" else 0), 0, reject=True, keep=impl != "wolf")
 
@@ -106,13 +120,13 @@ def x25519(t: Table) -> None:
     for i, (label, op, scalar, point) in enumerate(inputs):
         s, u = t.array(f"scalar{i}", scalar), t.array(f"point{i}", point)
         o = t.array(f"result{i}", r.x25519(scalar, point))
-        for impl in ("m0c", "wolf", "pornin", "mono", "ossl"):
+        for impl in ("m0c", "wolf", "pornin", "mono", "ossl", "mbed"):
             t.case(impl, op, label, f"run_{impl}_{op}", 32, s, 0, (0, 0), (u, 32), 0, (o, 32), 0)
 
 
 if __name__ == "__main__":
     primitive, path = sys.argv[1:]
-    table = Table(primitive)
+    table = Table(primitive, setups=("mbed",) if primitive != "blake2s" else ())
     {"chacha20poly1305": chacha20poly1305, "blake2s": blake2s, "x25519": x25519}[primitive](table)
     with open(path, "w") as f:
         f.write(table.header())

@@ -11,6 +11,12 @@
  *   measured by timing bench_noop (`bx lr`) with the same arguments; the driver
  *   subtracts it. A wrap (COUNTFLAG) returns 0xFFFFFFFF.
  *
+ * uint32_t time_call3_wrap(void *fn, a, b, c)
+ *   The same interval, for calls longer than one SysTick period (2^24 ticks): a wrap
+ *   (COUNTFLAG) adds 2^24. COUNTFLAG cannot tell one wrap from several, so a call that
+ *   wrapped twice would read 2^24 ticks short; bench/board/compare_summary.py fails any
+ *   comparison count below the emulator's zero-wait count.
+ *
  * uint32_t stack_call3(void *fn, a, b, c)
  *   Paints PAINT bytes below the call-site SP, calls fn(a, b, c) and returns the offset
  *   in bytes of the deepest changed word below the call-site SP (0 if none changed).
@@ -25,10 +31,7 @@
 
     .text
     .p2align 2
-    .global time_call3
-    .type time_call3, %function
-    .thumb_func
-time_call3:
+    .macro TIMED_CALL
     push {r4-r7, lr}
     mov  r6, r0
     mov  r7, r1
@@ -48,6 +51,13 @@ time_call3:
     ldr  r0, [r3]                /* end */
     pop  {r1}
     subs r0, r1, r0              /* down-counter: start - end */
+    .endm
+
+    .global time_call3
+    .type time_call3, %function
+    .thumb_func
+time_call3:
+    TIMED_CALL
     subs r3, #8                  /* SYST_CSR = SYST_CVR - 8 */
     ldr  r1, [r3]
     lsrs r1, r1, #17             /* COUNTFLAG (bit 16) -> C */
@@ -102,4 +112,23 @@ stack_call3:
     add  sp, #12
     pop  {r4-r7, pc}
     .size stack_call3, . - stack_call3
+    .ltorg
+
+/* Its own section: --gc-sections drops it from the images that do not call it, which
+ * then link exactly as without it. */
+    .section .text.time_call3_wrap, "ax", %progbits
+    .global time_call3_wrap
+    .type time_call3_wrap, %function
+    .thumb_func
+time_call3_wrap:
+    TIMED_CALL
+    subs r3, #8                  /* SYST_CSR = SYST_CVR - 8 */
+    ldr  r1, [r3]
+    lsrs r1, r1, #17             /* COUNTFLAG (bit 16) -> C */
+    bcc  3f
+    movs r1, #1
+    lsls r1, r1, #24             /* one wrap: 2^24 ticks of the 0xFFFFFF reload */
+    adds r0, r0, r1
+3:  pop  {r4-r7, pc}
+    .size time_call3_wrap, . - time_call3_wrap
     .ltorg

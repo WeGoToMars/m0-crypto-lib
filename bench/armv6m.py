@@ -13,6 +13,10 @@ FLASH_BASE = 0
 FLASH_BYTES = 256 * 1024
 RAM_BASE = 0x20200000
 RAM_BYTES = 32 * 1024
+# link.ld's STATIC region: static data of a comparator that needs it (Mbed TLS's PSA
+# state and heap), between the call's buffers and the stack.
+STATIC_BASE = RAM_BASE + 0x5200
+STATIC_END = RAM_BASE + 0x7200
 RETURN_ADDRESS = 0x3FF00
 INSTRUCTION_LIMIT = 20_000_000  # per call; callers may raise it
 JOB_FORMAT = struct.Struct("<8Ii")  # Matches Job in harness.c.
@@ -100,6 +104,8 @@ class Counts:
     peak_stack: int = 0
     # State the API makes the caller hold (caller_state_* in harness.c).
     caller_state: int = 0
+    # High-water mark of the comparator's heap buffer (IMPL_heap), in bytes.
+    peak_heap: int = 0
 
     @property
     def sram_store_model_cycles(self) -> int:
@@ -160,6 +166,7 @@ def instruction_cost(instruction: Instruction, machine: unicorn.Uc) -> tuple[int
 
 class Runner:
     def __init__(self, elf_path: Path):
+        self.static_end = STATIC_BASE
         with elf_path.open("rb") as stream:
             elf = ELFFile(stream)
             self.segments = []
@@ -167,8 +174,12 @@ class Runner:
                 if segment["p_type"] != "PT_LOAD":
                     continue
                 address = segment["p_vaddr"]
+                end = address + segment["p_memsz"]
                 if address >= RAM_BASE and segment["p_memsz"]:
-                    raise RuntimeError("benchmark requires no static RAM sections")
+                    if not STATIC_BASE <= address <= end <= STATIC_END:
+                        raise RuntimeError("static RAM sections must lie in link.ld's STATIC region")
+                    self.static_end = max(self.static_end, end)
+                # A fresh machine per call: .data is loaded, .bss starts zeroed.
                 self.segments.append((address, segment.data()))
             self.symbols = {
                 symbol.name: (symbol["st_value"] & ~1, symbol["st_size"])
@@ -275,7 +286,28 @@ class Runner:
         state_symbol = self.symbols.get(f"caller_state_{implementation}_{operation}")
         counts = Counts(caller_state=self.read_word(state_symbol[0]) if state_symbol else 0)
         wrapper, wrapper_size = self.symbols[f"run_{implementation}_{operation}"]
-        stack = {"in_wrapper": True, "entry_sp": buffers.stack}
+        stack = {"in_wrapper": True, "entry_sp": buffers.stack, "lowest": buffers.stack}
+
+        # One-time library initialisation (setup_IMPL), uncounted, as the board image
+        # runs it once before its timed calls.
+        setup = self.symbols.get(f"setup_{implementation}")
+        if setup:
+            machine.emu_start(setup[0] | 1, RETURN_ADDRESS, count=instruction_limit)
+            if machine.reg_read(arm_const.UC_ARM_REG_PC) != RETURN_ADDRESS:
+                raise RuntimeError(f"setup_{implementation} did not return")
+            machine.reg_write(arm_const.UC_ARM_REG_SP, buffers.stack)
+            machine.reg_write(arm_const.UC_ARM_REG_R0, buffers.job)
+            machine.reg_write(arm_const.UC_ARM_REG_LR, RETURN_ADDRESS | 1)
+
+        heap = self.symbols.get(f"{implementation}_heap")
+        if heap:
+            def record_heap_write(machine, _access, address, size, _value, _user_data):
+                counts.peak_heap = max(counts.peak_heap, address + size - heap[0])
+
+            machine.hook_add(
+                unicorn.UC_HOOK_MEM_WRITE, record_heap_write,
+                begin=heap[0], end=heap[0] + heap[1] - 1,
+            )
 
         def count_instruction(machine, address, size, _user_data):
             if address == RETURN_ADDRESS:
@@ -288,6 +320,7 @@ class Runner:
                 if stack["in_wrapper"]:
                     stack["entry_sp"] = sp
                 counts.peak_stack = max(counts.peak_stack, stack["entry_sp"] - sp)
+                stack["lowest"] = min(stack["lowest"], sp)
             stack["in_wrapper"] = in_wrapper
             instruction = self.decode(machine, address, size)
             cycles, stores = instruction_cost(instruction, machine)
@@ -301,6 +334,8 @@ class Runner:
             raise RuntimeError("call did not return before the instruction limit")
         if machine.reg_read(arm_const.UC_ARM_REG_SP) != buffers.stack:
             raise RuntimeError("call did not restore SP")
+        if stack["lowest"] < self.static_end:
+            raise RuntimeError("stack grew into the static RAM region")
         for address in guards:
             if bytes(machine.mem_read(address, 1)) != GUARD_SENTINEL:
                 raise RuntimeError(f"guard byte changed at {address:#x}")

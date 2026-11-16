@@ -7,6 +7,7 @@
 
 void semihost_write0(const char *s);   /* UART0 in these images (startup.S, UART_OUT) */
 uint32_t time_call3(void *fn, const void *a, const void *b, const void *c);
+uint32_t time_call3_wrap(void *fn, const void *a, const void *b, const void *c);
 uint32_t stack_call3(void *fn, const void *a, const void *b, const void *c);
 void bench_noop(void);
 

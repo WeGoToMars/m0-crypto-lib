@@ -5,12 +5,14 @@
  * release object), and times each wrapper as bench/count.py counts it: one call with
  * key setup, context initialisation and wrapper overhead included.
  *
- * Inputs are copied to aligned SRAM buffers before each call, as the emulator places
- * them, and the output buffer is filled with 0xa5 first.
+ * Library setup (setup_IMPL: Mbed TLS's allocator and psa_crypto_init) runs once at
+ * start, untimed. Inputs are copied to aligned SRAM buffers before each call, as the
+ * emulator places them, and the output buffer is filled with 0xa5 first.
  * 1. Gate: every case once; status, output and tag must match the table from
  *    gen_compare.py (reference.py). No timing unless all match.
  * 2. Timing: SysTick on the processor clock, REPS runs per case, each one
- *    time_call3(wrapper, &job) with the fixed call cost subtracted, checked afterwards:
+ *    time_call3_wrap(wrapper, &job) (one SysTick wrap allowed: Mbed TLS's X25519 takes
+ *    more than 2^24 cycles) with the fixed call cost subtracted, checked afterwards:
  *      CMP,impl,op,input,len,min,max,t0,t1,t2,t3,t4
  */
 #include "common.h"
@@ -80,6 +82,7 @@ static void fail(const char *what, const struct cmp_case *c) {
 int main(void) {
     bench_status = 0;
     put_s("m0-crypto comparison board bench, " CMP_PRIMITIVE " (bench/build.py objects)\n");
+    cmp_setup();
     for (unsigned i = 0; i < CMP_NCASES; i++) {
         prep(&cmp_cases[i]);
         cmp_cases[i].fn(&job);
@@ -91,7 +94,12 @@ int main(void) {
     checks = 0;
 
     timer_start();
-    overhead = timer_overhead();
+    /* The fixed call cost, through the same timing helper as the cases. */
+    overhead = 0xffffffffu;
+    for (unsigned i = 0; i < 16; i++) {
+        uint32_t t = time_call3_wrap((void *)bench_noop, 0, 0, 0);
+        if (t < overhead) overhead = t;
+    }
     put_s("OVERHEAD,"); put_u(overhead); put_s("\n");
     put_s("# CMP,impl,op,input,len,min,max,t0..t4 (ticks, overhead subtracted)\n");
     for (unsigned i = 0; i < CMP_NCASES; i++) {
@@ -100,7 +108,7 @@ int main(void) {
         s.invalid = 0;
         for (unsigned r = 0; r < REPS; r++) {
             prep(c);
-            series_add(&s, r, time_call3((void *)c->fn, &job, 0, 0), overhead);
+            series_add(&s, r, time_call3_wrap((void *)c->fn, &job, 0, 0), overhead);
             checks++;
             if (!result_ok(c)) fail("timed-result", c);
         }

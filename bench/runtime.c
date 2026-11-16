@@ -50,6 +50,38 @@ int CRYPTO_memcmp(const void *in_a, const void *in_b, size_t len) {
     for (size_t i = 0; i < len; i++) x |= a[i] ^ b[i];
     return x;
 }
+/* Compiler support routines that ARMv6-M code needs and this image has no toolchain
+ * library for. Mbed TLS calls them; the other comparators do not.
+ * ARM EABI unsigned division with remainder (no divide instruction): quotient in r0,
+ * remainder in r1. Shift-and-subtract over the quotient's bits only. */
+unsigned long long __aeabi_uidivmod(unsigned n, unsigned d) {
+    unsigned q = 0, bit = 1;
+    if (d == 0) return 0;
+    while (d < n && !(d & 0x80000000u)) { d <<= 1; bit <<= 1; }
+    while (bit) {
+        if (n >= d) { n -= d; q |= bit; }
+        d >>= 1; bit >>= 1;
+    }
+    return ((unsigned long long)n << 32) | q;
+}
+unsigned __aeabi_uidiv(unsigned n, unsigned d) { return (unsigned)__aeabi_uidivmod(n, d); }
+/* Count leading zeros of a nonzero word (__builtin_clz); compiler-rt's branch-free
+ * clzsi2.c algorithm. */
+int __clzsi2(unsigned x) {
+    unsigned t = ((x & 0xffff0000u) == 0) << 4;
+    x >>= 16 - t;
+    unsigned r = t;
+    t = ((x & 0xff00u) == 0) << 3;
+    x >>= 8 - t;
+    r += t;
+    t = ((x & 0xf0u) == 0) << 2;
+    x >>= 4 - t;
+    r += t;
+    t = ((x & 0xcu) == 0) << 1;
+    x >>= 2 - t;
+    r += t;
+    return (int)(r + ((2 - x) & -((x & 2) == 0)));
+}
 int memcmp(const void *a, const void *b, size_t n) {
  const unsigned char *x=a,*y=b;
  for (size_t i=0;i<n;i++) if(x[i]!=y[i]) return x[i]<y[i]?-1:1;

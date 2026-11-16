@@ -12,8 +12,9 @@ BASELINE = "m0c"
 NAMES = {
     "m0c": ("m0-crypto (ours)", "#059669"),
     "wolf": ("wolfSSL 5.9.4", "#7c3aed"),
-    "ossl": ("OpenSSL 3.5.0", "#d97706"),
+    "ossl": ("OpenSSL 3.5.0 kernels‡", "#d97706"),
     "mono": ("Monocypher 4.0.2", "#2563eb"),
+    "mbed": ("Mbed TLS 4.3.0", "#475569"),
     "ref": ("BLAKE2 reference", "#0891b2"),
     "pornin": ("x25519-cm0 (Pornin)†", "#db2777"),
 }
@@ -29,6 +30,21 @@ RESEARCH = {
 }
 
 
+# Every other comparator is measured through its public API; OpenSSL's internal kernels
+# are footnoted.
+KERNELS = {
+    "ossl": (
+        "‡ OpenSSL's internal portable C functions, called directly; its public API (EVP) "
+        "does not build for this target.",
+    ),
+}
+# The ChaCha20-Poly1305 charts add this line under the OpenSSL footnote.
+OSSL_COMPOSITION = (
+    "   Its ChaCha20-Poly1305 composes OpenSSL's ChaCha20 and Poly1305 kernels in benchmark "
+    "code (RFC 8439)."
+)
+
+
 def ordered(implementations) -> tuple:
     return tuple(impl for impl in NAMES if impl in implementations)
 
@@ -41,16 +57,18 @@ OPT_LEVELS = ("-Os (Size)", "-O2", "-O3 (Speed)")
 # Proved in Lean 4: the largest stack bound over the asset's public functions, in bytes.
 M0C_STACK_BOUNDS = {"chacha20poly1305": 320, "blake2s": 160, "x25519": 516}
 
-# Hand-entered; count.py does not measure code size. The BLAKE2s and X25519 figures are
-# the code_bytes of build/bench/PRIMITIVE/manifest.json for BENCH_OPT=-Os, -O2 and -O3:
-# linked .text and .rodata of each comparator's own objects (harness and shared runtime
-# excluded). The ChaCha20-Poly1305 OpenSSL figures include the harness composition.
+# Hand-entered; count.py does not measure code size. The BLAKE2s and X25519 figures, and
+# the ChaCha20-Poly1305 Mbed TLS figures, are the code_bytes of
+# build/bench/PRIMITIVE/manifest.json for BENCH_OPT=-Os, -O2 and -O3: linked .text and
+# .rodata of each comparator's own objects (harness and shared runtime excluded). The
+# ChaCha20-Poly1305 OpenSSL figures include the harness composition.
 CODE_SIZES = {
     "chacha20poly1305": {  # Flash bytes per optimization level
         "m0c": (3030, 3030, 3030),
         "wolf": (4092, 5982, 6848),
         "mono": (2890, 5364, 6648),
         "ossl": (2430, 2502, 2510),
+        "mbed": (10196, 10950, 11360),
     },
     "blake2s": {
         "m0c": (4748, 4748, 4748),
@@ -64,6 +82,7 @@ CODE_SIZES = {
         "pornin": (8850, 8850, 8850),
         "mono": (7258, 11778, 12434),
         "ossl": (6340, 7534, 8288),
+        "mbed": (14484, 20502, 22282),
     },
 }
 STACK_GROUPS = {
@@ -73,11 +92,17 @@ STACK_GROUPS = {
 }
 
 
+# Segments of the RAM bars, bottom up; the third appears only where a library has
+# static data or a heap (Mbed TLS).
+STACK_KEY = ("Library stack peak", "Caller-held API state", "Library heap and static data")
+STACK_OPACITY = (1, 0.35, 0.15)
+
+
 def y_axis(max_value: float) -> tuple[float, float]:
     """Return (axis top, tick step) with headroom for the labels above bars."""
     for limit, top, step in (
         (100, 100, 20), (200, 220, 50), (320, 350, 50),
-        (600, 600, 100), (1000, 1000, 200), (2500, 2500, 500),
+        (600, 600, 100), (1000, 1000, 200), (1600, 1600, 400), (2500, 2500, 500),
     ):
         if max_value <= limit:
             return top, step
@@ -100,7 +125,7 @@ def number(value: float) -> str:
 def panel(x, y, w, h, title, badge, y_title, data, pad_left) -> str:
     """Grouped bar chart. data maps impl -> {group label: value}.
 
-    A (base, extra) tuple value draws a stacked bar: base solid, extra light.
+    A tuple value draws a stacked bar, bottom up: solid, light, then lighter outlined.
     """
     groups = list(data[BASELINE])
     stacked = any(isinstance(v, tuple) for values in data.values() for v in values.values())
@@ -108,8 +133,11 @@ def panel(x, y, w, h, title, badge, y_title, data, pad_left) -> str:
     plot_w, plot_h = w - pad_left - 16, h - 90
     bottom = plot_y + plot_h
     peak = max(total(v) for values in data.values() for v in values.values())
-    # Stacked panels carry a two-row key in the top-left corner: keep bars below it.
-    top, step = y_axis(peak * 1.3 if stacked else peak)
+    # Stacked panels carry a key in the top-left corner: keep bars below it.
+    key = [label for i, label in enumerate(STACK_KEY) if stacked and any(
+        isinstance(v, tuple) and len(v) > i and v[i] for values in data.values()
+        for v in values.values())]
+    top, step = y_axis(peak * (1.1 + 0.1 * len(key)) if stacked else peak)
     badge_w = max(116.0, len(badge) * 6.5 + 24)
     badge_x = plot_x + plot_w - badge_w
     parts = [
@@ -152,16 +180,20 @@ def panel(x, y, w, h, title, badge, y_title, data, pad_left) -> str:
                     f'<rect x="{bar_x - gap / 2:.1f}" y="{plot_y:.1f}" width="{bar_w + gap:.1f}" '
                     f'height="{plot_h:.1f}" fill="{color}" fill-opacity="0.08"/>'
                 )
-            if isinstance(values[group], tuple):
-                # Light full-height bar, then the solid base segment over it.
-                parts.append(
-                    f'<rect x="{bar_x:.1f}" y="{bar_y:.1f}" width="{bar_w:.1f}" height="{bar_h:.1f}" '
-                    f'fill="{color}" fill-opacity="0.35" rx="2"/>'
-                )
-                bar_h = values[group][0] / top * plot_h
+            segments = values[group] if isinstance(values[group], tuple) else (value,)
+            segment_bottom = bottom
+            for i, segment in enumerate(segments):
+                segment_h = segment / top * plot_h
+                style = (f'fill="{fill(impl)}"' if i == 0 else
+                         f'fill="{color}" fill-opacity="{STACK_OPACITY[i]}"'
+                         + (f' stroke="{color}" stroke-width="0.8"' if i == 2 else ""))
+                if segment:
+                    parts.append(
+                        f'<rect x="{bar_x:.1f}" y="{segment_bottom - segment_h:.1f}" width="{bar_w:.1f}" '
+                        f'height="{segment_h:.1f}" {style} rx="2"/>'
+                    )
+                segment_bottom -= segment_h
             parts += [
-                f'<rect x="{bar_x:.1f}" y="{bottom - bar_h:.1f}" width="{bar_w:.1f}" height="{bar_h:.1f}" '
-                f'fill="{fill(impl)}" rx="2"/>',
                 f'<text x="{cx:.1f}" y="{bar_y - 4:.1f}" text-anchor="middle" font-size="8.5" '
                 f'font-family="monospace" font-weight="{800 if impl == BASELINE else 600}" '
                 f'fill="{"#0f172a" if impl == BASELINE else "#334155"}">{number(value)}</text>',
@@ -179,20 +211,20 @@ def panel(x, y, w, h, title, badge, y_title, data, pad_left) -> str:
         f'<line x1="{plot_x:.1f}" y1="{bottom:.1f}" x2="{plot_x + plot_w:.1f}" y2="{bottom:.1f}" '
         f'stroke="#cbd5e1" stroke-width="1"/>'
     )
-    if stacked:
-        for i, (label, opacity) in enumerate((("Library peak", 1), ("Caller-held API state", 0.35))):
-            key_y = plot_y + 6 + i * 16
-            parts.append(
-                f'<rect x="{plot_x + 10:.1f}" y="{key_y:.1f}" width="10" height="10" rx="2" '
-                f'fill="#64748b" fill-opacity="{opacity}"/>'
-                f'<text x="{plot_x + 26:.1f}" y="{key_y + 9:.1f}" font-size="10" fill="#475569">{label}</text>'
-            )
+    for i, label in enumerate(key):
+        key_y = plot_y + 6 + i * 16
+        outline = ' stroke="#64748b" stroke-width="0.8"' if i == 2 else ""
+        parts.append(
+            f'<rect x="{plot_x + 10:.1f}" y="{key_y:.1f}" width="10" height="10" rx="2" '
+            f'fill="#64748b" fill-opacity="{STACK_OPACITY[i]}"{outline}/>'
+            f'<text x="{plot_x + 26:.1f}" y="{key_y + 9:.1f}" font-size="10" fill="#475569">{label}</text>'
+        )
     return "\n".join(parts)
 
 
-def dashboard(title, subtitle, footer, impls, left, right=None) -> str:
+def dashboard(title, subtitle, footer, impls, left, right=None, extra_notes=()) -> str:
     """Two panels side by side (or one full-width panel) under a shared header and legend.
-    Footnotes for research implementations go below the footer."""
+    Footnotes for research implementations and kernels go below the footer."""
     impls = ordered(impls)
     x, legend = 32.0, []
     for impl in impls:
@@ -211,7 +243,9 @@ def dashboard(title, subtitle, footer, impls, left, right=None) -> str:
         f'fill-opacity="0.3"/><rect width="3" height="6" fill="{NAMES[impl][1]}"/></pattern>'
         for impl in impls if impl in RESEARCH
     )
-    notes = [line for impl in impls if impl in RESEARCH for line in RESEARCH[impl]]
+    footnotes = {**RESEARCH, **KERNELS}
+    notes = [line for impl in impls if impl in footnotes for line in footnotes[impl]]
+    notes += [note for note in extra_notes if "ossl" in impls]
     height = HEIGHT + 16 * len(notes)
     notes_svg = "".join(
         f'<text x="32" y="{HEIGHT - 14 + 16 * (i + 1)}" font-size="11" fill="#94a3b8">{escape(note)}</text>'
@@ -283,8 +317,13 @@ def chart_alignment(rows: list[dict]) -> str:
     return "a" if "a" in alignments else alignments[0]
 
 
+def measured(rows: list[dict]) -> tuple:
+    """Implementations with board counts in rows."""
+    return ordered({row["impl"] for row in rows})
+
+
 def chacha_cycles_chart(rows: list[dict]) -> str:
-    impls = ordered(CODE_SIZES["chacha20poly1305"])
+    impls = measured(rows)
     alignment = chart_alignment(rows)
     chacha = cycles_per_byte(rows, impls, "chacha", alignment)
     encrypt = cycles_per_byte(rows, impls, "encrypt", alignment)
@@ -297,11 +336,12 @@ def chacha_cycles_chart(rows: list[dict]) -> str:
         impls,
         ("ChaCha20 Stream Cipher", speedup_badge(chacha), y_title, chacha, 50.0),
         ("ChaCha20-Poly1305 AEAD Encrypt", speedup_badge(encrypt), y_title, encrypt, 50.0),
+        extra_notes=(OSSL_COMPOSITION,),
     )
 
 
 def blake2s_cycles_chart(rows: list[dict]) -> str:
-    impls = ordered(CODE_SIZES["blake2s"])
+    impls = measured(rows)
     alignment = chart_alignment(rows)
     one = cycles_per_byte(rows, impls, "hash", alignment)
     stream = cycles_per_byte(rows, impls, "stream", alignment)
@@ -318,7 +358,7 @@ def blake2s_cycles_chart(rows: list[dict]) -> str:
 
 
 def x25519_cycles_chart(rows: list[dict]) -> str:
-    impls = ordered(CODE_SIZES["x25519"])
+    impls = measured(rows)
     alignment = chart_alignment(rows)
     groups = {"shared": "Shared secret", "public": "Public key"}
     data = {impl: {} for impl in impls}
@@ -337,14 +377,21 @@ def x25519_cycles_chart(rows: list[dict]) -> str:
     )
 
 
-def peak_stack(primitive: str, rows: list[dict]) -> dict:
-    """(library peak, caller-held state) of the worst run per implementation and group."""
+def peak_ram(primitive: str, rows: list[dict]) -> dict:
+    """(library stack peak, caller-held state, library heap and static data): the largest
+    of each over the runs, per implementation and group."""
+    def worst(impl, ops, *columns):
+        return max(
+            sum(int(r.get(column, 0)) for column in columns)
+            for r in rows if r["impl"] == impl and r["op"] in ops
+        )
+
     return {
         impl: {
-            group: max(
-                (int(r["peak_stack_bytes"]), int(r["caller_state_bytes"]))
-                for r in rows
-                if r["impl"] == impl and r["op"] in ops
+            group: (
+                worst(impl, ops, "peak_stack_bytes"),
+                worst(impl, ops, "caller_state_bytes"),
+                worst(impl, ops, "peak_heap_bytes", "static_ram_bytes"),
             )
             for group, ops in STACK_GROUPS[primitive].items()
         }
@@ -363,13 +410,14 @@ def size_chart(primitive: str, rows: list[dict]) -> str:
     stack_badge = f"{M0C_STACK_BOUNDS[primitive]:,} B verified bound"
     return dashboard(
         f"Cortex-M0+ {TITLES[primitive]} Memory Footprint",
-        "Code size (Flash) and peak stack usage (SRAM) in bytes · ARM Cortex-M0+ (thumbv6m-none-eabi)",
-        "Stack: emulator-measured peak below the library call plus caller-held API state, worst run · "
+        "Code size (Flash) and peak RAM usage (SRAM) in bytes · ARM Cortex-M0+ (thumbv6m-none-eabi)",
+        "RAM: emulator-measured stack peak, caller-held API state, static data and peak heap, worst run · "
         "m0-crypto stack bound proved in Lean 4",
         tuple(sizes),
         ("Code Size (Flash / ROM)", code_badge, "Bytes in Flash (lower is better)", sizes, 56.0),
-        ("Peak Stack Usage (SRAM)", stack_badge, "Bytes on Stack (lower is better)",
-         peak_stack(primitive, rows), 56.0),
+        ("Peak RAM Usage (SRAM)", stack_badge, "Bytes of RAM (lower is better)",
+         peak_ram(primitive, rows), 56.0),
+        extra_notes=(OSSL_COMPOSITION,) if primitive == "chacha20poly1305" else (),
     )
 
 

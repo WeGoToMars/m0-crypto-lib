@@ -43,6 +43,10 @@ flash that design back afterwards with `ectf hw PORT flash IMAGE -n NAME` and `s
 dump again and compare. The design's name and length are at flash 0x5000.
 
 Timing method: SysTick, CLKSOURCE = processor clock (1 tick = 1 CPU cycle), restarted before
-each call. The fixed call overhead, measured with an empty function, is subtracted. Library
+each call. The fixed call overhead, measured with an empty function, is subtracted. The comparison
+image times through `time_call3_wrap`, which allows one SysTick wrap (2^24 ticks): Mbed TLS's
+X25519 takes about 24M cycles. A second wrap would make a count 2^24 short, so
+`compare_summary.py` fails any count below the zero-wait model. Mbed TLS's one-time setup
+(`setup_mbed`) runs once before timing. Library
 entry points are timed directly through an assembly helper (`time_call3`). Rows named TOTAL,
 and every comparison row, go through a C wrapper and are not library-only costs.
