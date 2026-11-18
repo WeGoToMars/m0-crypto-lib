@@ -1,6 +1,28 @@
 /*
  * m0-crypto: X25519 (RFC 7748 section 5).
  * SPDX-License-Identifier: MIT
+ *
+ * Verified in Lean 4 against the release machine code:
+ * - Correct: out matches RFC 7748 X25519 for any alignment and any overlap of
+ *   the three buffers.
+ * - Constant time: the instructions executed and the memory addresses
+ *   accessed depend only on addresses, never on the scalar or the point.
+ * - Memory: reads only scalar, point, its own code and its stack, and writes
+ *   only out and its stack, within the stack size listed below.
+ * - Clean-up: before it returns, the function erases every temporary value it
+ *   computed from the scalar or the point, so none is left on the stack. Your
+ *   own buffers are not touched beyond out: wipe the scalar yourself when you
+ *   no longer need it. If an interrupt arrives during the call, the processor
+ *   saves some working values on the stack, and this erasing does not cover
+ *   those copies.
+ * - Interrupts: allowed during a call, with the same result. Reserve 36 bytes
+ *   of stack beyond the listed size for each interrupt that can be active at
+ *   once on the same stack (one interrupt can interrupt another), plus what
+ *   your handlers push on that stack. Handlers must restore every register
+ *   and flag (a normal C handler does) and must not write the call's buffers
+ *   or stack.
+ *
+ * Exact conditions and proofs: https://github.com/WeGoToMars/m0-crypto-proofs
  */
 #ifndef M0CRYPTO_X25519_H
 #define M0CRYPTO_X25519_H
@@ -8,7 +30,7 @@
 #include <stdint.h>
 
 #ifndef M0C_OK
-#define M0C_OK 0   /* success; every m0-crypto header that returns a status defines it */
+#define M0C_OK 0   /* success; defined by every status-returning header */
 #endif
 
 #ifdef __cplusplus
@@ -16,40 +38,17 @@ extern "C" {
 #endif
 
 /*
- * out = X25519(scalar, point), the function of RFC 7748 section 5: the scalar is
- * clamped and bit 255 of the u-coordinate is masked inside the call. Always returns
- * M0C_OK. The argument order and return type match wolfSSL's low-level curve25519().
+ * Computes out = X25519(scalar, point) per RFC 7748 section 5: clamps the
+ * scalar and ignores bit 255 of the point.
  *
- * - The three buffers may have any alignment and may overlap in any way: both inputs
- *   are read completely before out is written.
- * - No check for a low-order point or an all-zero result. A protocol that needs it ORs
- *   the 32 output bytes in constant time.
- * - Stack: 516 bytes below the entry SP.
- * - Clearing: returns with r0-r3 and r12 zero, and zeroes the 480 bytes of stack below
- *   its saved registers (its frame and the stack its internal routines used). The 36
- *   bytes above them hold the caller's r4-r11 and LR as saved at entry.
- * - Proved in proofs/ (docs/REVIEW.md section 9) against the Lean model of these exact
- *   bytes: the result, the clearing above, the stack bound, the read regions, and a
- *   trace that depends only on the addresses and LR, not on the scalar or point.
- * - Interrupts (proved, modelled by the handler's effect): with the K bytes below the
- *   stack window above address 0 and disjoint from the code and the call's buffers,
- *   handlers that restore every register and flag and preserve the code, the buffers
- *   and the window outside the K bytes below SP do not change the returned registers,
- *   code or buffers. Exception entry stores up to 36 bytes below the interrupted SP
- *   (r0-r3, r12, LR, PC and xPSR, and 4 bytes to align SP to 8), so K is at least 36
- *   plus whatever handlers push on the same stack. Clearing covers uninterrupted calls:
- *   the exception frame holds the call's registers at the interrupt.
- * - Preconditions of the proofs (X25519.Pre in proofs/). SP is the stack pointer at
- *   entry. "code" is the 7,022-byte .text of the linked m0crypto_x25519 object.
- *   "A disjoint from B" means both address ranges end at or below 2^32 and do not
- *   overlap.
- *     code start and SP 4-byte aligned; SP >= 516;
- *     [SP-516, SP) disjoint from the code, out, scalar and point;
- *     out disjoint from the code;
- *     LR has bit 0 set (Thumb) and the return address lies outside the code.
- *   scalar and point may overlap the code, each other and out.
+ * Returns: M0C_OK (0) unconditionally.
+ * Buffers: Any alignment. out, scalar and point may overlap in any way.
+ * Stack:   516 bytes.
+ * Caution: Does not reject low-order points or an all-zero shared secret;
+ *          protocols that require rejection must check out in constant time.
  */
-int m0c_x25519(uint8_t out[32], const uint8_t scalar[32], const uint8_t point[32]);
+int m0c_x25519(uint8_t out[32], const uint8_t scalar[32],
+               const uint8_t point[32]);
 
 #ifdef __cplusplus
 }

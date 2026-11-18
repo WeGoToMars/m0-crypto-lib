@@ -1,6 +1,32 @@
 /*
- * m0-crypto: ChaCha20-Poly1305 AEAD (RFC 8439 section 2.8), complete-buffer API.
+ * m0-crypto: ChaCha20-Poly1305 AEAD (RFC 8439 section 2.8).
  * SPDX-License-Identifier: MIT
+ *
+ * Verified in Lean 4 against the release machine code:
+ * - Correct: ciphertext and tag match RFC 8439 for every length, alignment
+ *   and allowed buffer overlap. Decryption writes out only if the tag matches.
+ * - Constant time: the instructions executed and the memory addresses
+ *   accessed depend only on addresses, the lengths and, for decryption,
+ *   whether the tag matched. They never depend on the key, nonce, tag, AAD or
+ *   data.
+ * - Memory: reads only the buffers passed to it, its own code and its stack,
+ *   and writes only out, tag (encryption) and its stack, within the stack
+ *   size listed below.
+ * - Clean-up: before it returns, the function erases every temporary value it
+ *   computed from the key, nonce, tag, AAD or data, so none is left on the
+ *   stack, apart from whether decryption succeeded, which the return value
+ *   reports anyway. Your own buffers are not touched beyond out and tag: wipe
+ *   the key yourself when you no longer need it. If an interrupt arrives during
+ *   the call, the processor saves some working values on the stack, and this
+ *   erasing does not cover those copies.
+ * - Interrupts: allowed during a call, with the same result. Reserve 36 bytes
+ *   of stack beyond the listed size for each interrupt that can be active at
+ *   once on the same stack (one interrupt can interrupt another), plus what
+ *   your handlers push on that stack. Handlers must restore every register
+ *   and flag (a normal C handler does) and must not write the call's buffers
+ *   or stack.
+ *
+ * Exact conditions and proofs: https://github.com/WeGoToMars/m0-crypto-proofs
  */
 #ifndef M0CRYPTO_CHACHA20POLY1305_H
 #define M0CRYPTO_CHACHA20POLY1305_H
@@ -17,63 +43,40 @@ extern "C" {
 
 /*
  * Encrypts len bytes from in to out and writes the 16-byte authentication tag
- * calculated over aad and the ciphertext. Always returns M0C_OK.
+ * over aad and the ciphertext to tag (RFC 8439 section 2.8: block 0 generates
+ * the Poly1305 key, payload starts at counter 1).
  *
- * Decrypts ciphertext in to out after authenticating aad and in against tag.
- * On success, writes len bytes of plaintext to out and returns M0C_OK.
- * On authentication failure, returns M0C_ERR_AUTH and leaves out unmodified.
- *
- * Common rules:
- * - RFC 8439 construction: 256-bit key, 96-bit nonce, 128-bit tag. The one-time
- *   Poly1305 key uses block counter 0; the payload starts at counter 1. With a
- *   32-bit size_t, len and aad_len are always within RFC limits.
- * - Buffers may have any alignment. Exact in-place operation (out == in) and fully disjoint
- *   buffers are supported. Partially overlapping buffers are not supported. tag and aad
- *   must not overlap out (see the preconditions below for the exact conditions).
- * - When len == 0, in and out are not accessed. When aad_len == 0, aad is not accessed.
- * - Nonce uniqueness per key is the caller's responsibility.
- * - Timing (proved in the ARMv6-M model, see proofs/): the executed instructions
- *   and memory access addresses depend only on the pointer and length arguments,
- *   the stack pointer, the code and return addresses, and (for decryption) whether
- *   the tag verifies. They never depend on key, nonce, tag, AAD, or payload bytes.
- * - Stack bounds (proved): stack usage stays within 320 bytes below the entry SP
- *   at every instruction.
- * - Clearing (proved): on return r1-r3 and r12 are zero, and so are the 96 bytes
- *   [SP-136, SP-40) of the function's own frame (Poly1305 context, one-time key,
- *   lengths and expected tag). Every byte of [SP-320, SP) is a function of only the
- *   entry registers, the nonce pointer, the bytes of [SP-320, SP) at entry and, for
- *   decryption, whether the tag verified.
- * - Interrupts (proved, modelled by the handler's effect): with the K bytes below the
- *   stack window above address 0 and disjoint from the code and the call's buffers,
- *   handlers that restore every register and flag and preserve the code, the buffers, the
- *   stack arguments and the window outside the K bytes below SP do not change the
- *   returned registers, code or buffers. Exception entry stores up to 36 bytes below the
- *   interrupted SP (r0-r3, r12, LR, PC and xPSR, and 4 bytes to align SP to 8), so K is
- *   at least 36 plus whatever handlers push on the same stack. Clearing covers
- *   uninterrupted calls: the exception frame holds the call's registers at the interrupt.
- * - Preconditions of the proofs (Aead.APre in proofs/). SP is the stack pointer at
- *   entry. "code" is the 3,030-byte .text of the linked m0crypto_chacha20poly1305 object.
- *   "A disjoint from B" means both address ranges end at or below 2^32 and do not
- *   overlap. An empty range [p, p) still must not start strictly inside the other range.
- *     code start 4-byte aligned; SP 8-byte aligned, SP >= 320 and SP + 16 <= 2^32;
- *     [SP-320, SP+16) (stack window and the four stack arguments) disjoint from the
- *       code, out and tag;
- *     [SP-320, SP) disjoint from in, aad, key and nonce;
- *     out and tag each disjoint from the code; aad and tag each disjoint from out;
- *     in equal to out or disjoint from it;
- *     LR has bit 0 set (Thumb) and the return address lies outside the code.
- *   key and nonce may overlap out, aad, tag and the code. in and aad may overlap the
- *   code.
+ * Returns: M0C_OK (0) unconditionally.
+ * Buffers: Any alignment. out must equal in or not overlap it, and must not
+ *          overlap any other buffer. tag must not overlap any other buffer.
+ *          When len or aad_len is 0, that buffer is not accessed: it may be
+ *          NULL, but must not point into the middle of another buffer.
+ * Stack:   320 bytes.
+ * Caution: Nonce uniqueness per key is the caller's responsibility.
  */
 int m0c_chacha20poly1305_encrypt(uint8_t *out, uint8_t tag[16],
                                  const uint8_t *in, size_t len,
                                  const uint8_t *aad, size_t aad_len,
-                                 const uint8_t key[32], const uint8_t nonce[12]);
+                                 const uint8_t key[32],
+                                 const uint8_t nonce[12]);
 
+/*
+ * Authenticates aad and len ciphertext bytes at in against tag, then decrypts
+ * in to out (RFC 8439 section 2.8).
+ *
+ * Returns: M0C_OK (0) on authentic input, or M0C_ERR_AUTH (-2) without
+ *          modifying out (including when out == in) if authentication fails.
+ * Buffers: Any alignment. out must equal in or not overlap it, and must not
+ *          overlap tag, aad, key or nonce. When len or aad_len is 0, that
+ *          buffer is not accessed: it may be NULL, but must not point into
+ *          the middle of another buffer.
+ * Stack:   320 bytes.
+ */
 int m0c_chacha20poly1305_decrypt(uint8_t *out, const uint8_t tag[16],
                                  const uint8_t *in, size_t len,
                                  const uint8_t *aad, size_t aad_len,
-                                 const uint8_t key[32], const uint8_t nonce[12]);
+                                 const uint8_t key[32],
+                                 const uint8_t nonce[12]);
 
 #ifdef __cplusplus
 }

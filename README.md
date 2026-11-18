@@ -146,9 +146,9 @@ Lean 4 proofs in [`proofs/`](proofs/) cover the exact machine code of each relea
 - **Is correct:** returns the result specified by RFC 8439, RFC 7693 or RFC 7748, for any length, alignment and allowed buffer overlap.
 - **Is memory-safe:** reads only its buffers, its code and its stack, writes only its buffers and its stack, stays within the stack size above, and restores SP and r4-r11.
 - **Runs in constant time:** its instructions and memory addresses depend only on public inputs such as pointers and lengths.
-- **Leaves no secrets:** after a call that runs without interruption, no key, message or other secret stays on the stack it used or in r0-r3 and r12. Each header lists which bytes and registers are zero.
+- **Leaves no secrets:** after a call that runs without interruption, no key, message or other secret stays on the stack it used or in r0-r3 and r12. [`proofs/README.md`](proofs/README.md) lists which bytes and registers are zero.
 
-Each header gives the exact guarantees and the conditions a call must meet, interrupts included.
+Each header states the C caller contract and guarantees (conventions in [`docs/HEADERS.md`](docs/HEADERS.md)); [`proofs/README.md`](proofs/README.md) gives the machine-level preconditions, interrupt model and exact postconditions.
 
 The proofs assume that the buffers are ordinary RAM that nothing else (such as DMA) writes during the call, and that execution time depends only on the instructions and addresses, which the board tests in [`bench/board/`](bench/board/README.md) check for BLAKE2s and X25519. Theorem names and exact statements are in [`proofs/README.md`](proofs/README.md).
 

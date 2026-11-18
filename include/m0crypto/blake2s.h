@@ -1,6 +1,29 @@
 /*
  * m0-crypto: unkeyed BLAKE2s-256 (RFC 7693), incremental API.
  * SPDX-License-Identifier: MIT
+ *
+ * Verified in Lean 4 against the release machine code:
+ * - Correct: init, any number of updates and final write the RFC 7693 digest
+ *   of all the bytes passed to update, for any lengths and alignment.
+ * - Constant time: the instructions executed and the memory addresses
+ *   accessed depend only on addresses and on the lengths passed since init,
+ *   never on the message or the hash state.
+ * - Memory: reads only *c, its input, its own code and its stack, and writes
+ *   only *c, out (final) and its stack, within the stack size listed below.
+ * - Clean-up: before it returns, the function erases every temporary value it
+ *   computed from the message or the hash state, so none is left on the stack.
+ *   The hash state and up to 64 message bytes stay in *c: if the message is
+ *   secret, wipe *c yourself when you no longer need it. If an interrupt
+ *   arrives during the call, the processor saves some working values on the
+ *   stack, and this erasing does not cover those copies.
+ * - Interrupts: allowed during a call, with the same result. Reserve 36 bytes
+ *   of stack beyond the listed size for each interrupt that can be active at
+ *   once on the same stack (one interrupt can interrupt another), plus what
+ *   your handlers push on that stack. Handlers must restore every register
+ *   and flag (a normal C handler does) and must not write the call's buffers
+ *   or stack.
+ *
+ * Exact conditions and proofs: https://github.com/WeGoToMars/m0-crypto-proofs
  */
 #ifndef M0CRYPTO_BLAKE2S_H
 #define M0CRYPTO_BLAKE2S_H
@@ -12,65 +35,57 @@
 extern "C" {
 #endif
 
+/*
+ * 112-byte streaming state. Declare it as an ordinary variable and the
+ * compiler aligns it:
+ *     m0c_blake2s_ctx ctx;
+ *     m0c_blake2s_init(&ctx);
+ * Storage you provide yourself must be at least 4-byte aligned. Holds the
+ * chain value and up to 64 buffered input bytes; wipe after use if the input
+ * is secret.
+ */
 typedef struct {
     uint32_t h[8];
-    uint64_t count; /* message bytes compressed so far (pending bytes excluded), RFC 7693 t */
+    uint64_t count; /* compressed bytes so far (excludes buf), RFC 7693 t */
     uint8_t buf[64];
     size_t used;
 } m0c_blake2s_ctx;
 
 #if defined(__cplusplus) && __cplusplus >= 201103L
 static_assert(sizeof(m0c_blake2s_ctx) == 112, "ARM32 context layout changed");
-#elif !defined(__cplusplus) && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+#elif !defined(__cplusplus) && defined(__STDC_VERSION__) && \
+      __STDC_VERSION__ >= 201112L
 _Static_assert(sizeof(m0c_blake2s_ctx) == 112, "ARM32 context layout changed");
 #endif
 
 /*
- * Unkeyed BLAKE2s-256 streaming. init(c); update(c, p, n)*; final(c, out) writes
- * the 32-byte digest of the concatenated input.
+ * Initializes *c for a fresh unkeyed BLAKE2s-256 stream.
  *
- * - Context, input and output buffers are disjoint. Input and output may have any
- *   alignment. The context must be word aligned (normal C alignment is 8).
- * - Empty updates permit NULL input. final consumes the context: no update or final
- *   afterward without init.
- * - The caller keeps the cumulative length below 2^64 bytes (no overflow check).
- * - Timing: executed instructions and memory access addresses depend only on the pointer
- *   and length arguments, the sequence of lengths, the stack pointer and the code and
- *   return addresses. They never depend on message bytes or on the hash state (proved in
- *   Lean under the machine model, see proofs/).
- * - Stack (proved): init 4 bytes; update and final 160 bytes below the entry SP.
- * - Clearing (proved): update and final return with r0-r3 zero, final also r12; init
- *   returns with r0 the context pointer plus 36, r1 and r2 the last two IV words, r3
- *   zero and r12 unchanged. Every byte of the stack window at return, and r12 after
- *   update, depend only on the caller's registers at entry, the number of pending bytes
- *   and, for update, the window's bytes at entry: never on message bytes or the hash
- *   state. The context is caller memory, and the caller wipes it.
- * - Interrupts (proved, modelled by the handler's effect): with the K bytes below the
- *   stack window above address 0 and disjoint from the code and the call's buffers,
- *   handlers that restore every register and flag and preserve the code, the buffers
- *   and the window outside the K bytes below SP do not change the returned registers,
- *   code or buffers. Exception entry stores up to 36 bytes below the interrupted SP
- *   (r0-r3, r12, LR, PC and xPSR, and 4 bytes to align SP to 8), so K is at least 36
- *   plus whatever handlers push on the same stack. Clearing covers uninterrupted calls:
- *   the exception frame holds the call's registers at the interrupt.
- * - Preconditions of the proofs (Blake2s.Init.Pre, Blake2s.Update.Pre and
- *   Blake2s.Final.Pre in proofs/). SP is the stack pointer at entry; W is the stack
- *   window [SP-4, SP) for init and [SP-160, SP) for update and final. "code" is the
- *   4,748-byte .text of the linked m0crypto_blake2s object. "A disjoint from B" means
- *   both address ranges end at or below 2^32 and do not overlap. An empty range [p, p)
- *   still must not start strictly inside the other range.
- *     all: code start and SP 4-byte aligned; SP >= 4 (init) or SP >= 160 (update,
- *       final); c 4-byte aligned; the 112 context bytes, W and the code pairwise
- *       disjoint;
- *     update and final: the context holds the state of init followed by updates
- *       (as these functions leave it), and the bytes absorbed so far, plus n for
- *       update, total less than 2^64;
- *     update: [p, p+n) disjoint from the context and from W (it may overlap the code);
- *     final: the 32 bytes of out disjoint from the code, W and the context;
- *     LR has bit 0 set (Thumb) and the return address lies outside the code.
+ * Buffers: c must be 4-byte aligned.
+ * Stack:   4 bytes.
  */
 void m0c_blake2s_init(m0c_blake2s_ctx *c);
+
+/*
+ * Absorbs n bytes from p into *c (initialized by init and any prior updates).
+ *
+ * Buffers: p may have any alignment and must not overlap *c. When n == 0, p
+ *          is not accessed: it may be NULL, but must not point into *c.
+ * Stack:   160 bytes.
+ * Caution: Total bytes absorbed across a stream must stay below 2^64 (no
+ *          overflow check).
+ */
 void m0c_blake2s_update(m0c_blake2s_ctx *c, const uint8_t *p, size_t n);
+
+/*
+ * Writes the 32-byte BLAKE2s-256 digest of the absorbed bytes to out and
+ * consumes *c.
+ *
+ * Buffers: out may have any alignment and must not overlap *c.
+ * Stack:   160 bytes.
+ * Caution: Do not pass *c to update or final again without re-running init.
+ *          Wipe *c if the hashed input was secret.
+ */
 void m0c_blake2s_final(m0c_blake2s_ctx *c, uint8_t out[32]);
 
 #ifdef __cplusplus
