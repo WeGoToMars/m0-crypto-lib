@@ -119,7 +119,7 @@ Each primitive ships as its own release archive. Take the ones you need, and `SH
 
 4. Follow the rules in each header. Leave the stack space listed above, do not let buffers partly overlap, never reuse a nonce with the same key, wipe the BLAKE2s context after use, and reject low-order X25519 points if your protocol requires it.
 
-To assemble the code in your own build instead, use `src/m0crypto_ASSET_text.s` from the archive. Any ARM assembler (clang or GNU `as`) turns it into the same machine code.
+To assemble the code in your own build instead, use `src/m0crypto_ASSET_text.s` from the archive. Any ARM assembler (clang or GNU `as`) turns it into the same machine code. GNU `as` appends one Thumb NOP, which no call reaches, when the size is 2 mod 4.
 
 ## Build from source
 
@@ -137,7 +137,7 @@ The script requires clang/LLVM 23.1.4 on `PATH`, refuses any other version and w
 tools/test_qemu.sh            # all assets, or name them
 ```
 
-Runs each release object on QEMU's Cortex-M0 (QEMU 11.1.3) against RFC, Wycheproof, pyca/cryptography and `hashlib` vectors, including unaligned and overlapping buffers. It also checks callee-saved registers and stack depth, and for ChaCha20-Poly1305 and X25519 the cleared registers and stack bytes.
+Builds a test image for each asset from its release source and runs it on QEMU's Cortex-M0 (QEMU 11.1.3) against RFC, Wycheproof, pyca/cryptography and `hashlib` vectors, including unaligned and overlapping buffers. The images that `proofs/tools/check.sh` single-steps must contain the release `.text`. It also checks callee-saved registers and stack depth, and for ChaCha20-Poly1305 and X25519 the cleared registers and stack bytes.
 
 ## Proofs and Scope
 
@@ -146,7 +146,7 @@ Lean 4 proofs in [`proofs/`](proofs/) cover the exact machine code of each relea
 - **Is correct:** returns the result specified by RFC 8439, RFC 7693 or RFC 7748, for any length, alignment and allowed buffer overlap.
 - **Is memory-safe:** reads only its buffers, its code and its stack, writes only its buffers and its stack, stays within the stack size above, and restores SP and r4-r11.
 - **Runs in constant time:** its instructions and memory addresses depend only on public inputs such as pointers and lengths.
-- **Leaves no secrets:** no key, message or other secret stays on the stack or in scratch registers after it returns.
+- **Leaves no secrets:** after a call that runs without interruption, no key, message or other secret stays on the stack it used or in r0-r3 and r12. Each header lists which bytes and registers are zero.
 
 Each header gives the exact guarantees and the conditions a call must meet, interrupts included.
 

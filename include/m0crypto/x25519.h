@@ -35,7 +35,10 @@ extern "C" {
  *   stack window above address 0 and disjoint from the code and the call's buffers,
  *   handlers that restore every register and flag and preserve the code, the buffers
  *   and the window outside the K bytes below SP do not change the returned registers,
- *   code or buffers. Clearing covers uninterrupted calls.
+ *   code or buffers. Exception entry stores up to 36 bytes below the interrupted SP
+ *   (r0-r3, r12, LR, PC and xPSR, and 4 bytes to align SP to 8), so K is at least 36
+ *   plus whatever handlers push on the same stack. Clearing covers uninterrupted calls:
+ *   the exception frame holds the call's registers at the interrupt.
  * - Preconditions of the proofs (X25519.Pre in proofs/). SP is the stack pointer at
  *   entry. "code" is the 7,022-byte .text of the linked m0crypto_x25519 object.
  *   "A disjoint from B" means both address ranges end at or below 2^32 and do not
