@@ -134,7 +134,7 @@ static void run_vec(unsigned vi, const struct aead_vec *v, int mode) {
         check(r == M0C_OK, "enc ret", id, (uint32_t)r);
         check(memeq(out, ct, len), "enc ct", id, len);
         check(memeq(tag, tg, 16), "enc tag", id, 0);
-        check(allbyte(out - GUARD - oo, 0xee, GUARD) && allbyte(out + len, 0xee, GUARD), "enc guard", id, 0);
+        check(allbyte(out - GUARD, 0xee, GUARD) && allbyte(out + len, 0xee, GUARD), "enc guard", id, 0);
     }
     /* decrypt of the vector's (ct, tag) */
     memset(bufa, 0xee, sizeof bufa);
@@ -150,9 +150,9 @@ static void run_vec(unsigned vi, const struct aead_vec *v, int mode) {
               "dec reject unchanged", id, len);
     }
     if (mode == M_INPLACE) {
-        check(allbyte(bufa, 0xee, GUARD) && allbyte(in + len, 0xee, GUARD), "dec guard", id, 0);
+        check(allbyte(in - GUARD, 0xee, GUARD) && allbyte(in + len, 0xee, GUARD), "dec guard", id, 0);
     } else {
-        check(allbyte(out - GUARD - oo, 0x5a, GUARD) && allbyte(out + len, 0x5a, GUARD), "dec guard", id, 0);
+        check(allbyte(out - GUARD, 0x5a, GUARD) && allbyte(out + len, 0x5a, GUARD), "dec guard", id, 0);
     }
     if (!v->valid || mode != M_ALIGNED) return;
 

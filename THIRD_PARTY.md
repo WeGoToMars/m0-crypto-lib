@@ -1,6 +1,6 @@
 # Third-party material
 
-`tests/aead_vectors.h` contains transformed test data from Wycheproof's `chacha20_poly1305_test.json` (SHA-256 `fe61d25f90e1bde4461d00eafe61049e5f29bd999f36b766df9cda90906ad53d`). Wycheproof is licensed under [Apache-2.0](LICENSES/Apache-2.0.txt). The generated header selects 96-bit-nonce test cases and stores their byte strings in C arrays. Upstream repository: https://github.com/C2SP/wycheproof.
+`tests/aead_vectors.h` contains transformed test data from Wycheproof's `chacha20_poly1305_test.json` (SHA-256 `fe61d25f90e1bde4461d00eafe61049e5f29bd999f36b766df9cda90906ad53d`). Wycheproof is Copyright 2016-2026 The Wycheproof Authors and licensed under [Apache-2.0](LICENSES/Apache-2.0.txt). The generated header selects 96-bit-nonce test cases and stores their byte strings in C arrays. `tools/gen_aead_vectors.py` regenerates it from that file. Upstream repository: https://github.com/C2SP/wycheproof.
 
 The header also contains [RFC 8439](https://www.rfc-editor.org/rfc/rfc8439) vectors and values generated using pyca/cryptography 50.0.1. No pyca implementation code is included.
 

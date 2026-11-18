@@ -248,6 +248,9 @@ void irq_summary(void) {
         semihost_write0(" periods lengthened after an exception without progress");
     }
     semihost_write0("\n");
+    /* seen[] maps TEXT_MAX bytes of code: a longer .text would go uncounted past its end. */
+    check((uint32_t)(irq_text_hi - irq_text_lo) <= TEXT_MAX, "code fits the PC map",
+          (uint32_t)(irq_text_hi - irq_text_lo), TEXT_MAX);
     check(t.prologue > 0 && t.body > 0 && t.epilogue > 0, "exceptions in prologue, body, epilogue",
           t.prologue, t.epilogue);
 }

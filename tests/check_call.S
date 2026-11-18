@@ -1,5 +1,5 @@
 /*
- * int check_call(out, in, len, key, nonce, counter, uint32_t result[2])
+ * int check_call(out, in, len, key, nonce, counter, uint32_t result[3])
  * Calls m0c_chacha20_xor with sentinel values in r4-r11, then reports in
  * result[0] a bitmask of callee-saved registers (bit n = r(n)) or SP that changed
  * (bit 13), in result[1] the peak stack bytes used below the call-site SP, and in
