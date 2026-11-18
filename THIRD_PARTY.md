@@ -15,4 +15,6 @@ Benchmark dependencies are fetched separately into ignored `bench/third_party/`:
 - BLAKE2 reference implementation (commit `ed1974ea83433eba7b2d95c5dcd9ac33cb847913`, `ref/blake2s-ref.c` and its headers): CC0 / OpenSSL / Apache-2.0, at the user's choice.
 - x25519-cm0 by Thomas Pornin (commit `75a53f277d15acd9a0a8e220c8e26a48cc8974c2`, `src/x25519-cm0.S`): MIT.
 
+`bench/runtime.c` follows two third-party routines. `CRYPTO_memcmp` is OpenSSL's portable C version from `crypto/cpuid.c` (Apache-2.0). `__clzsi2` follows the algorithm of LLVM compiler-rt's `clzsi2.c` (Apache-2.0 WITH LLVM-exception). Both are linked only into the benchmark images.
+
 The pinned URLs and SHA-256 hashes are in `bench/sources.lock.json`; the Mbed TLS archive and the wolfSSL commit are pinned in `bench/build.py`. Each fetched checkout retains its upstream license. These sources are used exclusively by the benchmark comparison binaries. `tools/build_lib.sh` builds the release library independently without third-party dependencies.

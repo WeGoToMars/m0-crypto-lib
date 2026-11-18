@@ -21,7 +21,7 @@ import capstone
 import unicorn
 
 from armv6m import CallResult, Counts, OUTPUT_SENTINEL, Runner
-from chart import M0C_STACK_BOUNDS, write_charts
+from chart import CODE_SIZES, HEAP_BYTES, M0C_STACK_BOUNDS, NAMES, size_chart
 from reference import (
     ALICE_PRIVATE,
     BOB_PUBLIC,
@@ -306,10 +306,9 @@ def write_results(
     writer = csv.DictWriter(buffer, fieldnames=rows[0].keys())
     writer.writeheader()
     writer.writerows(rows)
-    (output / "cycles.csv").write_text(buffer.getvalue())
-
     primitive = arguments.primitive
-    chart_paths = write_charts(primitive, rows, ROOT / "bench/charts" / primitive)
+    # Render everything first: a renderer that fails leaves the previous results whole.
+    svg = size_chart(primitive, rows)
 
     source_hashes = {
         name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
@@ -329,8 +328,12 @@ def write_results(
         "counter_sources_sha256": source_hashes,
         "model": "ARM DDI 0484B instruction cost model (zero-wait-state memory baseline)",
     }
+    chart = ROOT / "bench/charts" / primitive / "size_summary.svg"
+    chart.parent.mkdir(parents=True, exist_ok=True)
+    (output / "cycles.csv").write_text(buffer.getvalue())
     (output / "cycles.json").write_text(json.dumps(metadata, indent=2) + "\n")
-    return chart_paths
+    chart.write_text(svg)
+    return [chart]
 
 
 def main() -> None:
@@ -338,6 +341,11 @@ def main() -> None:
     output = ROOT / "build/bench" / arguments.primitive
     manifest = verified_manifest(output)
     runner = Runner(output / "bench.elf")
+    # The RAM chart counts each comparator's whole heap buffer (IMPL_heap) from chart.HEAP_BYTES.
+    heaps = {impl: runner.symbols[f"{impl}_heap"][1] for impl in NAMES if f"{impl}_heap" in runner.symbols}
+    if any(HEAP_BYTES.get(impl) != size for impl, size in heaps.items()) or any(
+            impl in CODE_SIZES[arguments.primitive] and impl not in heaps for impl in HEAP_BYTES):
+        raise RuntimeError(f"linked heap buffers {heaps} differ from chart.HEAP_BYTES {HEAP_BYTES}")
     rows = ROWS[arguments.primitive](runner, arguments)
     # Static RAM is a property of the linked image, from the build manifest.
     for row in rows:

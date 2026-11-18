@@ -13,9 +13,12 @@
  *
  * uint32_t time_call3_wrap(void *fn, a, b, c)
  *   The same interval, for calls longer than one SysTick period (2^24 ticks): a wrap
- *   (COUNTFLAG) adds 2^24. COUNTFLAG cannot tell one wrap from several, so a call that
- *   wrapped twice would read 2^24 ticks short; bench/board/compare_summary.py fails any
- *   comparison count below the emulator's zero-wait count.
+ *   (COUNTFLAG) adds 2^24. COUNTFLAG is read a few ticks after the end count, so a wrap
+ *   in that gap would add 2^24 to a call that ended before it: with COUNTFLAG set and an
+ *   end count of at most WRAP_GAP the sample is ambiguous and returns 0xFFFFFFFF.
+ *   COUNTFLAG cannot tell one wrap from several, so a call that wrapped twice would read
+ *   2^24 ticks short; bench/board/compare_summary.py fails any comparison count below the
+ *   emulator's zero-wait count.
  *
  * uint32_t stack_call3(void *fn, a, b, c)
  *   Paints PAINT bytes below the call-site SP, calls fn(a, b, c) and returns the offset
@@ -28,6 +31,7 @@
 
 #define SYST_CVR 0xE000E018
 #define PAINT    2048
+#define WRAP_GAP 32              /* ticks: more than the end-count-to-COUNTFLAG gap */
 
     .text
     .p2align 2
@@ -48,9 +52,9 @@
     mov  r2, r5
     blx  r6
     ldr  r3, =SYST_CVR
-    ldr  r0, [r3]                /* end */
+    ldr  r2, [r3]                /* end */
     pop  {r1}
-    subs r0, r1, r0              /* down-counter: start - end */
+    subs r0, r1, r2              /* down-counter: start - end */
     .endm
 
     .global time_call3
@@ -126,9 +130,14 @@ time_call3_wrap:
     ldr  r1, [r3]
     lsrs r1, r1, #17             /* COUNTFLAG (bit 16) -> C */
     bcc  3f
+    cmp  r2, #WRAP_GAP           /* end count near 0: the wrap may follow the end sample */
+    bls  4f
     movs r1, #1
     lsls r1, r1, #24             /* one wrap: 2^24 ticks of the 0xFFFFFF reload */
     adds r0, r0, r1
 3:  pop  {r4-r7, pc}
+4:  movs r0, #0
+    mvns r0, r0                  /* TIME_OVERFLOW */
+    pop  {r4-r7, pc}
     .size time_call3_wrap, . - time_call3_wrap
     .ltorg

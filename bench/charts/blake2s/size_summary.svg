@@ -138,6 +138,6 @@
 
   <!-- Clean footer -->
   <line x1="24" y1="418" x2="1056" y2="418" stroke="#f1f5f9" stroke-width="1"/>
-  <text x="32" y="436" font-size="11" fill="#94a3b8">RAM: emulator-measured stack peak, caller-held API state, static data and peak heap, worst run · m0-crypto stack bound proved in Lean 4</text>
+  <text x="32" y="436" font-size="11" fill="#94a3b8">Flash: own code and constants · RAM: stack peak, caller-held state, static data, heap written (worst run) · m0-crypto stack bound proved in Lean 4</text>
   <text x="32" y="452" font-size="11" fill="#94a3b8">‡ OpenSSL&#x27;s internal portable C functions, called directly; its public API (EVP) does not build for this target.</text>
 </svg>

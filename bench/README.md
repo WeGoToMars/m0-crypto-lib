@@ -44,7 +44,7 @@ Mbed TLS 4.3.0 is built from its release archive, whose `tf-psa-crypto/` holds t
 - `MBEDTLS_PLATFORM_MEMORY` and `MBEDTLS_MEMORY_BUFFER_ALLOC_C`: Mbed TLS's own allocator over a 4,096-byte static buffer. The PSA ChaCha20 cipher context and the elliptic-curve big numbers live on this heap.
 - `MBEDTLS_PLATFORM_NO_STD_FUNCTIONS`, and `MBEDTLS_NO_UDBL_DIVISION`, upstream's option for targets whose 64-bit division would be a linked software routine.
 
-The build fetches source files pinned by revision and SHA-256 in `sources.lock.json`, the Mbed TLS release archive pinned by SHA-256 in `build.py`, plus a clean wolfSSL checkout pinned by commit in `build.py`. Sources and upstream licenses reside in the ignored `bench/third_party/`. Comparison images are separate from the release library.
+The build fetches source files pinned by revision and SHA-256 in `sources.lock.json`, the Mbed TLS release archive pinned by SHA-256 in `build.py` (extracted afresh on every build that uses it), plus a clean wolfSSL checkout pinned by commit in `build.py`. Sources and upstream licenses reside in the ignored `bench/third_party/`. Comparison images are separate from the release library.
 
 ## Code layout
 
@@ -162,7 +162,7 @@ The manifests record:
 The CSV reports executed instructions and these measures:
 
 - `zero_wait_cycles`: Cortex-M0+ instruction costs from [ARM DDI 0484B, table 3-1](https://documentation-service.arm.com/static/60411742ee937942ba3016f2). The model selects the single-cycle multiplier and ordinary AHB memory accesses.
-- `sram_store_model_cycles`: the same total plus one cycle per store transfer, including PUSH and STM elements. With the release objects placed in SRAM, the MSPM0L2228 board counts of [`board/`](board/README.md) equal this figure exactly for all three assets.
+- `sram_store_model_cycles`: the same total plus one cycle per store transfer, including PUSH and STM elements. With the BLAKE2s and X25519 release objects placed in SRAM (`board/build.sh ASSET sram`), the MSPM0L2228 board counts of [`board/`](board/README.md) equal this figure exactly.
 - `peak_stack_bytes`: the deepest stack below the entry SP of any function the wrapper calls; the wrapper's own frame is excluded. The run fails if m0-crypto exceeds its Lean-proved bound: 320 bytes for ChaCha20-Poly1305, 160 for BLAKE2s, 516 for X25519.
 - `caller_state_bytes`: state the public API requires the caller to hold on its stack, declared as `caller_state_*` in the harness. The RAM chart stacks it on `peak_stack_bytes`. It covers:
   - `sizeof(ChaCha)` for wolfSSL ChaCha20
@@ -171,12 +171,12 @@ The CSV reports executed instructions and these measures:
   - each BLAKE2s context (plus OpenSSL's parameter block)
   - wolfSSL's two X25519 key objects
   - Mbed TLS's key attributes, plus the cipher or AEAD operation object.
-- `peak_heap_bytes`: the highest byte of a comparator's heap buffer (`IMPL_heap`) written during the call, as an offset from its start. Only Mbed TLS has one.
+- `peak_heap_bytes`: the highest byte of a comparator's heap buffer (`IMPL_heap`) written during the call, as an offset from its start. Only Mbed TLS has one. The RAM chart stacks it on top and gives the reserved buffer size (`HEAP_BYTES` in `chart.py`, checked against the linked symbol) in a footnote.
 - `static_ram_bytes`: the comparator's linked `.data` and `.bss` from the build manifest, excluding the harness's heap buffer. Only Mbed TLS has any: its PSA state, key slot and allocator state. The RAM chart stacks it and `peak_heap_bytes` on top.
 
 A comparator may define `setup_IMPL`, one-time initialization (Mbed TLS: the allocator and `psa_crypto_init`). `armv6m.py` runs it, uncounted, before each call; the board image runs it once at start. Static data is linked into its own RAM region (`link.ld`), between the call's buffers and the stack, and a run fails if the stack reaches it.
 
-`code_bytes` sums the linked `.text` and `.rodata` input sections of each comparator's own objects after `--gc-sections`, excluding the harness and the shared runtime. The ChaCha20-Poly1305 chart's OpenSSL figures predate this accounting and also include the harness composition (2,430 bytes at `-Os`, against 2,020 for the kernels alone).
+`code_bytes` sums the linked `.text` and `.rodata` input sections of each comparator's own objects after `--gc-sections`, excluding the harness and the shared runtime: compiler runtime routines and initialized-data load images are not counted. The ChaCha20-Poly1305 chart's OpenSSL figures predate this accounting and also include the harness composition (2,430 bytes at `-Os`, against 2,020 for the kernels alone).
 
 Unicorn executes the instructions and the Python hook assigns modeled costs. These metrics are instruction-cost model estimates without flash wait-states, cache or bus contention.
 
@@ -186,7 +186,7 @@ On the board and in the model, Mbed TLS's X25519 count depends on the input: its
 
 ## Licenses
 
-The harness is MIT licensed. Fetched sources keep their upstream licenses:
+The harness is MIT licensed, except two routines in `runtime.c` that follow OpenSSL and LLVM compiler-rt code under Apache-2.0 ([`THIRD_PARTY.md`](../THIRD_PARTY.md)). Fetched sources keep their upstream licenses:
 
 - wolfSSL: GPL-3.0/commercial
 - Monocypher: BSD-2-Clause/CC0

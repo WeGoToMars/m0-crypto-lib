@@ -85,6 +85,10 @@ CODE_SIZES = {
         "mbed": (14484, 20502, 22282),
     },
 }
+# Heap buffers the harness links for a comparator (IMPL_heap), in bytes: the RAM chart's bar
+# counts the bytes a call wrote and a footnote gives the reserved size. count.py checks each
+# against the linked symbol.
+HEAP_BYTES = {"mbed": 4096}
 STACK_GROUPS = {
     "chacha20poly1305": {"AEAD Encrypt": {"encrypt"}, "AEAD Decrypt": {"decrypt", "reject"}, "ChaCha20": {"chacha"}},
     "blake2s": {"One update": {"hash"}, "16-byte updates": {"stream"}},
@@ -94,7 +98,7 @@ STACK_GROUPS = {
 
 # Segments of the RAM bars, bottom up; the third appears only where a library has
 # static data or a heap (Mbed TLS).
-STACK_KEY = ("Library stack peak", "Caller-held API state", "Library heap and static data")
+STACK_KEY = ("Library stack peak", "Caller-held API state", "Library static data and heap written")
 STACK_OPACITY = (1, 0.35, 0.15)
 
 
@@ -222,7 +226,7 @@ def panel(x, y, w, h, title, badge, y_title, data, pad_left) -> str:
     return "\n".join(parts)
 
 
-def dashboard(title, subtitle, footer, impls, left, right=None, extra_notes=()) -> str:
+def dashboard(title, subtitle, footer, impls, left, right=None, extra_notes=(), notes=()) -> str:
     """Two panels side by side (or one full-width panel) under a shared header and legend.
     Footnotes for research implementations and kernels go below the footer."""
     impls = ordered(impls)
@@ -244,8 +248,8 @@ def dashboard(title, subtitle, footer, impls, left, right=None, extra_notes=()) 
         for impl in impls if impl in RESEARCH
     )
     footnotes = {**RESEARCH, **KERNELS}
-    notes = [line for impl in impls if impl in footnotes for line in footnotes[impl]]
-    notes += [note for note in extra_notes if "ossl" in impls]
+    notes = [line for impl in impls if impl in footnotes for line in footnotes[impl]] + [
+        note for note in extra_notes if "ossl" in impls] + list(notes)
     height = HEIGHT + 16 * len(notes)
     notes_svg = "".join(
         f'<text x="32" y="{HEIGHT - 14 + 16 * (i + 1)}" font-size="11" fill="#94a3b8">{escape(note)}</text>'
@@ -378,25 +382,39 @@ def x25519_cycles_chart(rows: list[dict]) -> str:
 
 
 def peak_ram(primitive: str, rows: list[dict]) -> dict:
-    """(library stack peak, caller-held state, library heap and static data): the largest
-    of each over the runs, per implementation and group."""
+    """(library stack peak, caller-held state, static data and heap written): the largest of
+    each over the runs, per implementation and group. An implementation without runs (Mbed
+    TLS on in-place buffers) has no bar."""
     def worst(impl, ops, *columns):
-        return max(
-            sum(int(r.get(column, 0)) for column in columns)
-            for r in rows if r["impl"] == impl and r["op"] in ops
-        )
+        values = [sum(int(r.get(c, 0)) for c in columns)
+                  for r in rows if r["impl"] == impl and r["op"] in ops]
+        if not values:
+            raise ValueError(f"{impl} has runs, but none of {sorted(ops)}")
+        return max(values)
 
+    measured = {r["impl"] for r in rows}
     return {
         impl: {
             group: (
                 worst(impl, ops, "peak_stack_bytes"),
                 worst(impl, ops, "caller_state_bytes"),
-                worst(impl, ops, "peak_heap_bytes", "static_ram_bytes"),
+                worst(impl, ops, "static_ram_bytes", "peak_heap_bytes"),
             )
             for group, ops in STACK_GROUPS[primitive].items()
         }
-        for impl in ordered(CODE_SIZES[primitive])
+        for impl in ordered(CODE_SIZES[primitive]) if impl in measured
     }
+
+
+def heap_notes(rows: list[dict]) -> list[str]:
+    """One footnote per heap buffer: its reserved size and the most of it any call wrote."""
+    notes = []
+    for impl, size in HEAP_BYTES.items():
+        used = [int(r.get("peak_heap_bytes", 0)) for r in rows if r["impl"] == impl]
+        if used:
+            notes.append(f"{NAMES[impl][0]}: {size:,} B heap reserved, at most {max(used):,} B "
+                         "written.")
+    return notes
 
 
 TITLES = {"chacha20poly1305": "ChaCha20-Poly1305", "blake2s": "BLAKE2s-256", "x25519": "X25519"}
@@ -411,13 +429,14 @@ def size_chart(primitive: str, rows: list[dict]) -> str:
     return dashboard(
         f"Cortex-M0+ {TITLES[primitive]} Memory Footprint",
         "Code size (Flash) and peak RAM usage (SRAM) in bytes · ARM Cortex-M0+ (thumbv6m-none-eabi)",
-        "RAM: emulator-measured stack peak, caller-held API state, static data and peak heap, worst run · "
-        "m0-crypto stack bound proved in Lean 4",
+        "Flash: own code and constants · RAM: stack peak, caller-held state, static data, "
+        "heap written (worst run) · m0-crypto stack bound proved in Lean 4",
         tuple(sizes),
         ("Code Size (Flash / ROM)", code_badge, "Bytes in Flash (lower is better)", sizes, 56.0),
         ("Peak RAM Usage (SRAM)", stack_badge, "Bytes of RAM (lower is better)",
          peak_ram(primitive, rows), 56.0),
         extra_notes=(OSSL_COMPOSITION,) if primitive == "chacha20poly1305" else (),
+        notes=heap_notes(rows),
     )
 
 
@@ -426,14 +445,6 @@ CYCLES_CHARTS = {
     "blake2s": blake2s_cycles_chart,
     "x25519": x25519_cycles_chart,
 }
-
-
-def write_charts(primitive: str, rows: list[dict], directory: Path) -> list[Path]:
-    """The size chart, from count.py rows."""
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / "size_summary.svg"
-    path.write_text(size_chart(primitive, rows))
-    return [path]
 
 
 def write_cycles_chart(primitive: str, rows: list[dict], directory: Path) -> Path:

@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import shutil
 import tarfile
 import urllib.request
 
@@ -197,15 +198,17 @@ def fetch_locked_sources(sources: list[dict]) -> None:
 
 
 def fetch_mbedtls() -> None:
+    """Download the pinned archive once, and extract a fresh tree from it on every build, so
+    the compiled sources are always the checksummed ones."""
     if not MBEDTLS_ARCHIVE.exists():
         THIRD_PARTY.mkdir(parents=True, exist_ok=True)
         with urllib.request.urlopen(MBEDTLS_URL, timeout=120) as response:
             MBEDTLS_ARCHIVE.write_bytes(response.read())
     if sha256(MBEDTLS_ARCHIVE) != MBEDTLS_SHA256:
         raise SystemExit(f"source checksum mismatch: {MBEDTLS_ARCHIVE}")
-    if not TF_PSA.exists():
-        with tarfile.open(MBEDTLS_ARCHIVE) as archive:
-            archive.extractall(THIRD_PARTY, filter="data")
+    shutil.rmtree(TF_PSA.parent, ignore_errors=True)
+    with tarfile.open(MBEDTLS_ARCHIVE) as archive:
+        archive.extractall(THIRD_PARTY, filter="data")
 
 
 def fetch_wolfssl() -> None:
@@ -408,7 +411,8 @@ def main() -> None:
     sources = json.loads((BENCH / "sources.lock.json").read_text())
     fetch_locked_sources(sources)
     fetch_wolfssl()
-    fetch_mbedtls()
+    if "mbed" in config["implementations"]:
+        fetch_mbedtls()
     run(ROOT / "tools/build_lib.sh", primitive)
     flags = compiler_flags(optimization, config)
     objects, owners = compile_sources(flags, primitive, config, output)

@@ -21,11 +21,11 @@ The headers document the buffer, aliasing and alignment rules. In short:
 
 Measured on a [TI MSPM0L2228](https://www.ti.com/product/MSPM0L2228) (Cortex-M0+, single-cycle multiplier).
 
-The charts compare against portable C libraries and other optimized assembly implementations on the same board, code in flash (see [`bench/`](bench/README.md), [`bench/board/`](bench/board/README.md)).
+The charts compare against portable C libraries and other optimized assembly implementations on the same board, code in flash (see [`bench/`](bench/README.md), [`bench/board/`](bench/board/README.md)). The C libraries are compiled with `-Os`.
 
 ### ChaCha20-Poly1305
 
-**1.6-2.0x** fewer cycles than wolfSSL, OpenSSL and Monocypher for ChaCha20, and **2.0-2.4x** fewer for AEAD encryption/decryption.
+**1.6-3.7x** fewer cycles than wolfSSL, the OpenSSL kernels, Monocypher and Mbed TLS for ChaCha20, and **2.0-2.7x** fewer for AEAD encryption.
 
 <details>
 <summary>📊 ChaCha20-Poly1305 performance and memory usage comparison</summary>
@@ -38,7 +38,7 @@ The charts compare against portable C libraries and other optimized assembly imp
 
 ### BLAKE2s-256
 
-**1.5-2.7x** fewer cycles than wolfSSL, OpenSSL and the BLAKE2 reference implementation.
+**1.5-2.7x** fewer cycles than wolfSSL, the OpenSSL kernels and the BLAKE2 reference implementation.
 
 <details>
 <summary>📊 BLAKE2s-256 performance and memory usage comparison</summary>
@@ -51,7 +51,7 @@ The charts compare against portable C libraries and other optimized assembly imp
 
 ### X25519
 
-**3.9x** fewer cycles than the portable C libraries. Thomas Pornin's hand-written assembly, [x25519-cm0](https://github.com/pornin/x25519-cm0), takes 0.7% fewer cycles.[^pornin]
+**3.9-6.9x** fewer cycles than the portable C libraries. Thomas Pornin's hand-written assembly, [x25519-cm0](https://github.com/pornin/x25519-cm0), takes 0.6% fewer cycles (3,458k against 3,478k).[^pornin]
 
 <details>
 <summary>📊 X25519 performance and memory usage comparison</summary>
