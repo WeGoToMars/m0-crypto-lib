@@ -20,7 +20,7 @@ jobs:
   library:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
         with:
           submodules: recursive
       - uses: ./.github/actions/toolchain
@@ -36,7 +36,7 @@ jobs:
         run: tools/test_qemu.sh
       - name: Release archives
         run: python3 -I tools/release.py
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9   # v7.0.2
         with:
           name: release-archives
           path: build/release/
@@ -45,14 +45,19 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 300
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
         with:
           submodules: recursive
       - uses: ./.github/actions/toolchain
+      # elan v4.2.4, the archive elan-init.sh would fetch, pinned so the bootstrap cannot change.
       - name: Lean (the version in lean-toolchain)
         run: |
-          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/v4.2.4/elan-init.sh \
-            | sh -s -- -y --default-toolchain none
+          curl -sSfL -o "$RUNNER_TEMP/elan.tar.gz" \
+            https://github.com/leanprover/elan/releases/download/v4.2.4/elan-x86_64-unknown-linux-gnu.tar.gz
+          echo "42b94d4244e8353142c456ec0e4ca6528fd898a6c604d4059f494e706e431f63  $RUNNER_TEMP/elan.tar.gz" \
+            | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/elan.tar.gz" -C "$RUNNER_TEMP" elan-init
+          "$RUNNER_TEMP/elan-init" -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
       # Lake starts one Lean process per core regardless of memory: build under a budget first,
       # so that check.sh's own lake build finds the workspaces up to date.
@@ -99,14 +104,18 @@ jobs:
     env:
       M0C_BUILD_MEM_GB: "12"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
         with:
           submodules: recursive
       - uses: ./.github/actions/toolchain
       - name: Lean (the version in lean-toolchain)
         run: |
-          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/v4.2.4/elan-init.sh \
-            | sh -s -- -y --default-toolchain none
+          curl -sSfL -o "$RUNNER_TEMP/elan.tar.gz" \
+            https://github.com/leanprover/elan/releases/download/v4.2.4/elan-x86_64-unknown-linux-gnu.tar.gz
+          echo "42b94d4244e8353142c456ec0e4ca6528fd898a6c604d4059f494e706e431f63  $RUNNER_TEMP/elan.tar.gz" \
+            | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/elan.tar.gz" -C "$RUNNER_TEMP" elan-init
+          "$RUNNER_TEMP/elan-init" -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
       - name: Mutants
         run: ${{ matrix.run }}
