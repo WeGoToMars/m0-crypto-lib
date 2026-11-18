@@ -93,12 +93,14 @@ jobs:
       matrix:
         include:
           - name: ChaCha20-Poly1305
-            run: python3 -I proofs/tools/mutate_aead.py
+            run: |
+              python3 -I proofs/tools/mutate_aead.py
+              python3 -I proofs/tools/mutate_aead.py --cert --only "tag compare exits"
           - name: X25519
             run: |
               tools/build_lib.sh x25519
               python3 -I proofs/tools/mutate_x25519.py --exec
-              python3 -I proofs/tools/mutate_x25519.py --exec --cert --only "branch on secret carry"
+              python3 -I proofs/tools/mutate_x25519.py --exec --cert --only "load at a secret address"
           - name: BLAKE2s
             run: python3 -I proofs/tools/mutate_blake2s.py
     env:

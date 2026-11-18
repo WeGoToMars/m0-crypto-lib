@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.3
+
+- Same machine code as 0.3.2.
+- The proof model rejects a conditional branch to the next instruction, because a trace cannot show whether it was taken. No release object contains one.
+- The interrupted-call theorems of ChaCha20 and AEAD decryption also keep `out` on a call they reject.
+- The headers state the C caller contract and the proved guarantees in plain C terms, and `proofs/README.md` gives the exact machine-level conditions.
+- Stricter release checks: QEMU must execute exactly the instructions a call can execute, every internal `bl` returns to a listed instruction, and release objects hold only Thumb functions in `.text`.
+- CI pins its GitHub actions to commit SHAs and the Lean toolchain manager (elan) to a release archive and its SHA-256.
+- Each archive's `MANIFEST.txt` names the proofs commit that states its claims.
+- CI tests the constant-time proofs against deliberate timing leaks, and the mutation checks report crashes and timeouts as errors.
+
 ## 0.3.2
 
 - Same machine code as 0.3.1.
