@@ -15,9 +15,12 @@ For each asset the script:
    $GNU_AS) and requires the same symbols, mapping symbols and alignment, and a .text that is the
    proved bytes followed only by the padding GNU as adds (see PAD);
 4. compiles each of the asset's headers on its own;
-5. writes build/release/m0crypto-ASSET-VERSION.tar.gz:
+5. writes build/release/m0crypto-ASSET-VERSION.tar.gz, after removing the archives and
+   SHA256SUMS of any earlier run from build/release:
      LICENSE  MANIFEST.txt  include/m0crypto/*.h  lib/libm0crypto_ASSET.a
      src/m0crypto_ASSET_text.s
+   MANIFEST.txt is build_lib.sh's, followed by the library commit and the proofs commit (the
+   gitlink of HEAD, which the proofs checkout must match) whose theorems state the claims.
 
 VERSION is the first `## ` heading of CHANGELOG.md. Archive entries carry the time
 SOURCE_DATE_EPOCH, or the commit time of HEAD, and no owner, so a rebuild of one commit gives the
@@ -71,8 +74,13 @@ def elf_text(path):
         for k in range(s[5] // 16):
             st_name, value, size, info, _other, shndx = struct.unpack_from("<IIIBBH", d, s[4] + 16 * k)
             name = cstr(secs[s[6]][4], st_name)
+            # The archive and the generated source carry Thumb functions in .text only.
+            if info & 0xF == STT_FUNC and (shndx != ti or not value & 1):
+                sys.exit(f"{path}: function {name} is not a Thumb function in .text")
             if shndx != ti:
                 continue
+            if name.split(".")[0] == "$a":
+                sys.exit(f"{path}: .text has ARM code at {value:#x}")
             if name.split(".")[0] in ("$t", "$d"):
                 maps.append((value, name[:2]))
             elif info & 0xF == STT_FUNC:
@@ -177,9 +185,19 @@ def main(argv):
         text=True).stdout)
     clang = re.search(r"^clang=(\S+)", open(os.path.join(ROOT, "tools", "versions.txt")).read(),
                       re.M).group(1)
+    git = lambda *a: subprocess.run(["git", *a], check=True, capture_output=True,
+                                    text=True).stdout.strip()
+    commit, proofs = git("-C", ROOT, "rev-parse", "HEAD"), git("-C", ROOT, "rev-parse", "HEAD:proofs")
+    if git("-C", PROOFS, "rev-parse", "HEAD") != proofs:
+        sys.exit(f"release: the proofs checkout is not at the gitlink {proofs} of HEAD")
+    provenance = (f"library_commit={commit}\nproofs_commit={proofs}\n"
+                  f"claims=https://github.com/WeGoToMars/m0-crypto-proofs/tree/{proofs}\n").encode()
     run(os.path.join(ROOT, "tools", "build_lib.sh"), *assets, stdout=subprocess.DEVNULL)
     outdir = os.path.join(ROOT, "build", "release")
     os.makedirs(outdir, exist_ok=True)
+    for f in os.listdir(outdir):
+        if f == "SHA256SUMS" or (f.startswith("m0crypto-") and f.endswith(".tar.gz")):
+            os.remove(os.path.join(outdir, f))
     sums = []
     for a in assets:
         unit = f"m0crypto_{a}"
@@ -213,7 +231,7 @@ def main(argv):
                     "-", input=f'#include "m0crypto/{h}"\n'.encode())
         read = lambda p: open(p, "rb").read()
         files = {"LICENSE": (read(os.path.join(ROOT, "LICENSE")), 0o644),
-                 "MANIFEST.txt": (read(os.path.join(lib, "MANIFEST.txt")), 0o644),
+                 "MANIFEST.txt": (read(os.path.join(lib, "MANIFEST.txt")) + provenance, 0o644),
                  f"lib/lib{unit}.a": (read(os.path.join(lib, f"lib{unit}.a")), 0o644),
                  f"src/{unit}_text.s": (src.encode(), 0o644)}
         for h in headers:

@@ -87,7 +87,7 @@ Each primitive ships as its own release archive. Take the ones you need, and `SH
    tar xzf m0crypto-chacha20poly1305-*.tar.gz --strip-components=1 -C third_party/m0crypto-chacha20poly1305
    ```
 
-   The folder holds `include/m0crypto/*.h`, `lib/libm0crypto_chacha20poly1305.a`, `src/`, `LICENSE` and `MANIFEST.txt`.
+   The folder holds `include/m0crypto/*.h`, `lib/libm0crypto_chacha20poly1305.a`, `src/`, `LICENSE` and `MANIFEST.txt`, which records the build hashes and the proofs commit whose theorems state the claims.
 
 2. Link it. With CMake:
 
